@@ -154,6 +154,7 @@ void ReadFileInputStream::vread(
     stats_->incRawBytesRead(length);
     stats_->incTotalScanTime((getCurrentTimeMicro() - readStartMicros) * 1000);
   }
+  read(ranges, offset, purpose);
 }
 
 bool Region::operator<(const Region& other) const {
