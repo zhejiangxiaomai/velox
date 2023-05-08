@@ -41,6 +41,18 @@ class HdfsFileSystem::Impl {
         hdfsGetLastError())
   }
 
+  explicit Impl(const Config* config, const HdfsServiceEndpoint& endpoint) {
+    auto builder = hdfsNewBuilder();
+    hdfsBuilderSetNameNode(builder, endpoint.host.c_str());
+    hdfsBuilderSetNameNodePort(builder, endpoint.port);
+    hdfsClient_ = hdfsBuilderConnect(builder);
+    VELOX_CHECK_NOT_NULL(
+        hdfsClient_,
+        "Unable to connect to HDFS: {}, got error: {}.",
+        endpoint.identity,
+        hdfsGetLastError())
+  }
+
   ~Impl() {
     LOG(INFO) << "Disconnecting HDFS file system";
     int disconnectResult = hdfsDisconnect(hdfsClient_);
@@ -57,6 +69,13 @@ class HdfsFileSystem::Impl {
  private:
   hdfsFS hdfsClient_;
 };
+
+HdfsFileSystem::HdfsFileSystem(
+    const std::shared_ptr<const Config>& config,
+    const HdfsServiceEndpoint& endpoint)
+    : FileSystem(config) {
+  impl_ = std::make_shared<Impl>(config.get(), endpoint);
+}
 
 HdfsFileSystem::HdfsFileSystem(
     const std::shared_ptr<const Config>& config,

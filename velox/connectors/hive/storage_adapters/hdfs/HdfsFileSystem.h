@@ -85,6 +85,9 @@ class HdfsFileSystem : public FileSystem {
   }
 
   static bool isHdfsFile(std::string_view filename);
+  static HdfsServiceEndpoint getServiceEndpoint(const Config* config);
+  static HdfsServiceEndpoint getServiceEndpoint(
+      const std::string_view filePath);
 
   /// The given filePath is used to infer hdfs endpoint. If hdfs identity is
   /// missing from filePath, the configured "hive.hdfs.host" & "hive.hdfs.port"
