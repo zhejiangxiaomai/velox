@@ -446,7 +446,7 @@ std::unique_ptr<common::Filter> leafCallToSubfieldFilter(
                        : makeEqualFilter(call.inputs()[1], evaluator);
       }
     }
-  } else if (call.name() == "neq") {
+  } else if (call.name() == "neq" || call.name() == "notequalto") {
     if (auto field = asField(&call, 0)) {
       if (toSubfield(field, subfield)) {
         return negated ? makeEqualFilter(call.inputs()[1], evaluator)
