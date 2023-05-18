@@ -35,20 +35,20 @@ class CheckOverflowFunction final : public exec::VectorFunction {
     auto fromType = args[0]->type();
     auto toType = args[2]->type();
     context.ensureWritable(rows, toType, resultRef);
-    if (toType->kind() == TypeKind::SHORT_DECIMAL) {
-      if (fromType->kind() == TypeKind::SHORT_DECIMAL) {
-        applyForVectorType<UnscaledShortDecimal, UnscaledShortDecimal>(
+    if (toType->isShortDecimal()) {
+      if (fromType->isShortDecimal()) {
+        applyForVectorType<int64_t, int64_t>(
             rows, args, outputType, context, resultRef);
       } else {
-        applyForVectorType<UnscaledLongDecimal, UnscaledShortDecimal>(
+        applyForVectorType<int128_t, int64_t>(
             rows, args, outputType, context, resultRef);
       }
     } else {
-      if (fromType->kind() == TypeKind::SHORT_DECIMAL) {
-        applyForVectorType<UnscaledShortDecimal, UnscaledLongDecimal>(
+      if (fromType->isShortDecimal()) {
+        applyForVectorType<int64_t, int128_t>(
             rows, args, outputType, context, resultRef);
       } else {
-        applyForVectorType<UnscaledLongDecimal, UnscaledLongDecimal>(
+        applyForVectorType<int128_t, int128_t>(
             rows, args, outputType, context, resultRef);
       }
     }
@@ -111,16 +111,16 @@ class MakeDecimalFunction final : public exec::VectorFunction {
     if (precision <= 18) {
       context.ensureWritable(
           rows,
-          SHORT_DECIMAL(
-              static_cast<uint8_t>(precision), static_cast<uint8_t>(scale)),
+          DECIMAL(static_cast<uint8_t>(precision), static_cast<uint8_t>(scale)),
           resultRef);
-      auto result = resultRef->asUnchecked<FlatVector<UnscaledShortDecimal>>()
-                        ->mutableRawValues();
+      auto result =
+          resultRef->asUnchecked<FlatVector<int64_t>>()->mutableRawValues();
       rows.applyToSelected([&](int row) {
         auto unscaled = unscaledVec->valueAt<int64_t>(row);
 
-        if (UnscaledShortDecimal::valueInRange(unscaled)) {
-          result[row] = UnscaledShortDecimal(unscaled);
+        if (unscaled >= DecimalUtil::kShortDecimalMin &&
+            unscaled <= DecimalUtil::kShortDecimalMax) {
+          result[row] = unscaled;
         } else {
           if (nullOnOverflow) {
             resultRef->setNull(row, true);
@@ -133,15 +133,15 @@ class MakeDecimalFunction final : public exec::VectorFunction {
     } else {
       context.ensureWritable(
           rows,
-          LONG_DECIMAL(
-              static_cast<uint8_t>(precision), static_cast<uint8_t>(scale)),
+          DECIMAL(static_cast<uint8_t>(precision), static_cast<uint8_t>(scale)),
           resultRef);
-      auto result = resultRef->asUnchecked<FlatVector<UnscaledLongDecimal>>()
-                        ->mutableRawValues();
+      auto result =
+          resultRef->asUnchecked<FlatVector<int128_t>>()->mutableRawValues();
       rows.applyToSelected([&](int row) {
         auto unscaled = unscaledVec->valueAt<int64_t>(row);
-        if (UnscaledLongDecimal::valueInRange(unscaled)) {
-          result[row] = UnscaledLongDecimal(unscaled);
+        if (unscaled >= DecimalUtil::kLongDecimalMin &&
+            unscaled <= DecimalUtil::kLongDecimalMax) {
+          result[row] = unscaled;
         } else {
           if (nullOnOverflow) {
             resultRef->setNull(row, true);
@@ -192,19 +192,18 @@ class RoundDecimalFunction final : public exec::VectorFunction {
       if (toPrecision > 18) {
         context.ensureWritable(
             rows,
-            LONG_DECIMAL(
+            DECIMAL(
                 static_cast<uint8_t>(toPrecision),
                 static_cast<uint8_t>(toScale)),
             resultRef);
-        auto rescaledValue =
-            DecimalUtil::rescaleWithRoundUp<TInput, UnscaledLongDecimal>(
-                decimalValue->valueAt<TInput>(row),
-                fromPrecision,
-                fromScale,
-                toPrecision,
-                toScale);
-        auto result = resultRef->asUnchecked<FlatVector<UnscaledLongDecimal>>()
-                          ->mutableRawValues();
+        auto rescaledValue = DecimalUtil::rescaleWithRoundUp<TInput, int128_t>(
+            decimalValue->valueAt<TInput>(row),
+            fromPrecision,
+            fromScale,
+            toPrecision,
+            toScale);
+        auto result =
+            resultRef->asUnchecked<FlatVector<int128_t>>()->mutableRawValues();
         if (rescaledValue.has_value()) {
           result[row] = rescaledValue.value();
         } else {
@@ -213,19 +212,18 @@ class RoundDecimalFunction final : public exec::VectorFunction {
       } else {
         context.ensureWritable(
             rows,
-            SHORT_DECIMAL(
+            DECIMAL(
                 static_cast<uint8_t>(toPrecision),
                 static_cast<uint8_t>(toScale)),
             resultRef);
-        auto rescaledValue =
-            DecimalUtil::rescaleWithRoundUp<TInput, UnscaledShortDecimal>(
-                decimalValue->valueAt<TInput>(row),
-                fromPrecision,
-                fromScale,
-                toPrecision,
-                toScale);
-        auto result = resultRef->asUnchecked<FlatVector<UnscaledShortDecimal>>()
-                          ->mutableRawValues();
+        auto rescaledValue = DecimalUtil::rescaleWithRoundUp<TInput, int64_t>(
+            decimalValue->valueAt<TInput>(row),
+            fromPrecision,
+            fromScale,
+            toPrecision,
+            toScale);
+        auto result =
+            resultRef->asUnchecked<FlatVector<int64_t>>()->mutableRawValues();
         if (rescaledValue.has_value()) {
           result[row] = rescaledValue.value();
         } else {
@@ -256,14 +254,15 @@ class AbsFunction final : public exec::VectorFunction {
       auto decimalType = inputType->asShortDecimal();
       context.ensureWritable(
           rows,
-          SHORT_DECIMAL(decimalType.precision(), decimalType.scale()),
+          DECIMAL(decimalType.precision(), decimalType.scale()),
           resultRef);
-      auto result = resultRef->asUnchecked<FlatVector<UnscaledShortDecimal>>()
-                        ->mutableRawValues();
+      auto result =
+          resultRef->asUnchecked<FlatVector<int64_t>>()->mutableRawValues();
       rows.applyToSelected([&](int row) {
         auto unscaled = std::abs(decimalVector->valueAt<int64_t>(row));
-        if (UnscaledShortDecimal::valueInRange(unscaled)) {
-          result[row] = UnscaledShortDecimal(unscaled);
+        if (unscaled >= DecimalUtil::kShortDecimalMin &&
+            unscaled <= DecimalUtil::kShortDecimalMax) {
+          result[row] = unscaled;
         } else {
           // TODO: adjust the bahavior according to ANSI.
           resultRef->setNull(row, true);
@@ -273,14 +272,15 @@ class AbsFunction final : public exec::VectorFunction {
       auto decimalType = inputType->asLongDecimal();
       context.ensureWritable(
           rows,
-          LONG_DECIMAL(decimalType.precision(), decimalType.scale()),
+          DECIMAL(decimalType.precision(), decimalType.scale()),
           resultRef);
-      auto result = resultRef->asUnchecked<FlatVector<UnscaledLongDecimal>>()
-                        ->mutableRawValues();
+      auto result =
+          resultRef->asUnchecked<FlatVector<int128_t>>()->mutableRawValues();
       rows.applyToSelected([&](int row) {
         auto unscaled = std::abs(decimalVector->valueAt<int128_t>(row));
-        if (UnscaledLongDecimal::valueInRange(unscaled)) {
-          result[row] = UnscaledLongDecimal(unscaled);
+        if (unscaled >= DecimalUtil::kLongDecimalMin &&
+            unscaled <= DecimalUtil::kLongDecimalMax) {
+          result[row] = unscaled;
         } else {
           // TODO: adjust the bahavior according to ANSI.
           resultRef->setNull(row, true);
@@ -367,11 +367,14 @@ std::shared_ptr<exec::VectorFunction> makeRoundDecimal(
     const std::vector<exec::VectorFunctionArg>& inputArgs) {
   VELOX_CHECK_EQ(inputArgs.size(), 2);
   auto fromType = inputArgs[0].type;
+  if (fromType->isShortDecimal()) {
+    return std::make_shared<RoundDecimalFunction<int64_t>>();
+  }
+  if (fromType->isLongDecimal()) {
+    return std::make_shared<RoundDecimalFunction<int128_t>>();
+  }
+
   switch (fromType->kind()) {
-    case TypeKind::SHORT_DECIMAL:
-      return std::make_shared<RoundDecimalFunction<UnscaledShortDecimal>>();
-    case TypeKind::LONG_DECIMAL:
-      return std::make_shared<RoundDecimalFunction<UnscaledLongDecimal>>();
     default:
       VELOX_FAIL(
           "Not support this type {} in round_decimal", fromType->kindName())
@@ -383,11 +386,13 @@ std::shared_ptr<exec::VectorFunction> makeAbs(
     const std::vector<exec::VectorFunctionArg>& inputArgs) {
   VELOX_CHECK_EQ(inputArgs.size(), 1);
   auto type = inputArgs[0].type;
+  if (type->isShortDecimal()) {
+    return std::make_shared<AbsFunction<int64_t>>();
+  }
+  if (type->isLongDecimal()) {
+    return std::make_shared<AbsFunction<int128_t>>();
+  }
   switch (type->kind()) {
-    case TypeKind::SHORT_DECIMAL:
-      return std::make_shared<AbsFunction<UnscaledShortDecimal>>();
-    case TypeKind::LONG_DECIMAL:
-      return std::make_shared<AbsFunction<UnscaledLongDecimal>>();
     default:
       VELOX_FAIL("Not support this type {} in abs", type->kindName())
   }

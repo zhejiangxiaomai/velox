@@ -162,10 +162,8 @@ TEST_F(SingleSerializerTest, constant) {
   auto rowVector = makeRowVector({
       makeFlatVector<int64_t>({0, 1, 2, 3, 4}),
       makeConstant<int64_t>(100, 5),
-      makeConstant<UnscaledLongDecimal>(
-          UnscaledLongDecimal(10012), 5, DECIMAL(20, 2)),
-      makeConstant<UnscaledShortDecimal>(
-          UnscaledShortDecimal(10012), 5, DECIMAL(10, 2)),
+      makeConstant<int128_t>(10012, 5, DECIMAL(20, 2)),
+      makeConstant<int64_t>(int64_t(10012), 5, DECIMAL(10, 2)),
       makeFlatVector<int32_t>({0, 1, 2, 3, 4}),
       makeNullConstant(TypeKind::INTEGER, 5),
       makeConstant<StringView>("ALGERIA", 5),
@@ -196,11 +194,11 @@ TEST_F(SingleSerializerTest, emptyPage) {
 
 TEST_F(SingleSerializerTest, unscaledLongDecimal) {
   std::vector<int128_t> decimalValues(102);
-  decimalValues[0] = UnscaledLongDecimal::min().unscaledValue();
+  decimalValues[0] = DecimalUtil::kLongDecimalMin;
   for (int row = 1; row < 101; row++) {
     decimalValues[row] = row - 50;
   }
-  decimalValues[101] = UnscaledLongDecimal::max().unscaledValue();
+  decimalValues[101] = DecimalUtil::kLongDecimalMax;
   auto vector =
       vectorMaker_->longDecimalFlatVector(decimalValues, DECIMAL(20, 5));
 

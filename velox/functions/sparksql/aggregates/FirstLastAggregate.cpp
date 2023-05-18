@@ -120,9 +120,8 @@ class FirstLastAggregateBase
 
 template <>
 inline int32_t
-FirstLastAggregateBase<true, UnscaledLongDecimal>::accumulatorAlignmentSize()
-    const {
-  return static_cast<int32_t>(sizeof(UnscaledLongDecimal));
+FirstLastAggregateBase<true, int128_t>::accumulatorAlignmentSize() const {
+  return static_cast<int32_t>(sizeof(int128_t));
 }
 
 template <bool ignoreNull, typename TData, bool numeric>
@@ -414,12 +413,9 @@ bool registerFirstLast(const std::string& name) {
                 resultType);
           case TypeKind::DATE:
             return std::make_unique<TClass<ignoreNull, Date, true>>(resultType);
-          case TypeKind::SHORT_DECIMAL:
-            return std::make_unique<
-                TClass<ignoreNull, UnscaledShortDecimal, true>>(resultType);
-          case TypeKind::LONG_DECIMAL:
-            return std::make_unique<
-                TClass<ignoreNull, UnscaledLongDecimal, true>>(resultType);
+          case TypeKind::HUGEINT:
+            return std::make_unique<TClass<ignoreNull, int128_t, true>>(
+                resultType);
           case TypeKind::VARCHAR:
           case TypeKind::ARRAY:
           case TypeKind::MAP:

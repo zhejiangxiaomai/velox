@@ -241,8 +241,6 @@ class HashBuild final : public Operator {
   // If it is zero, then there is no such limit.
   const uint64_t spillMemoryThreshold_;
 
-  const std::optional<Spiller::Config> spillConfig_;
-
   State state_{State::kRunning};
 
   // The row type used for hash table build and disk spilling.

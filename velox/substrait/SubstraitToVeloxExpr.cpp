@@ -407,13 +407,16 @@ SubstraitVeloxExprConverter::toVeloxExpr(
       int128_t decimalValue;
       memcpy(&decimalValue, decimal.c_str(), 16);
       if (precision <= 18) {
-        auto type = SHORT_DECIMAL(precision, scale);
+        auto type = DECIMAL(precision, scale);
         return std::make_shared<core::ConstantTypedExpr>(
-            type, variant::shortDecimal((int64_t)decimalValue, type));
+            type, variant(static_cast<int64_t>(decimalValue)));
       } else {
-        auto type = LONG_DECIMAL(precision, scale);
+        auto type = DECIMAL(precision, scale);
         return std::make_shared<core::ConstantTypedExpr>(
-            type, variant::longDecimal(decimalValue, type));
+            type,
+            variant(HugeInt::build(
+                static_cast<uint64_t>(decimalValue >> 64),
+                static_cast<uint64_t>(decimalValue))));
       }
     }
     case ::substrait::Expression_Literal::LiteralTypeCase::kNull: {
@@ -421,10 +424,10 @@ SubstraitVeloxExprConverter::toVeloxExpr(
           toVeloxType(subParser_->parseType(substraitLit.null())->type);
       if (veloxType->isShortDecimal()) {
         return std::make_shared<core::ConstantTypedExpr>(
-            veloxType, variant::shortDecimal(std::nullopt, veloxType));
+            veloxType, variant::null(TypeKind::BIGINT));
       } else if (veloxType->isLongDecimal()) {
         return std::make_shared<core::ConstantTypedExpr>(
-            veloxType, variant::longDecimal(std::nullopt, veloxType));
+            veloxType, variant::null(TypeKind::HUGEINT));
       } else {
         return std::make_shared<core::ConstantTypedExpr>(
             veloxType, variant::null(veloxType->kind()));

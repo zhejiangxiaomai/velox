@@ -749,12 +749,7 @@ TypePtr SubstraitToVeloxPlanValidator::getDecimalType(
       precisionStart + 1, (tokenIndex - precisionStart - 1)));
   auto scale =
       stoi(decimalType.substr(tokenIndex + 1, (scaleStart - tokenIndex - 1)));
-
-  if (precision <= 18) {
-    return SHORT_DECIMAL(precision, scale);
-  } else {
-    return LONG_DECIMAL(precision, scale);
-  }
+  return DECIMAL(precision, scale);
 }
 
 TypePtr SubstraitToVeloxPlanValidator::getRowType(

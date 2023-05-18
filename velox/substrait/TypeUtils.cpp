@@ -85,6 +85,10 @@ TypePtr toVeloxType(const std::string& typeName) {
 
   auto type = getNameBeforeDelimiter(typeName, "<");
   auto typeKind = mapNameToTypeKind(std::string(type));
+  if (isDecimalName(typeName)) {
+    auto decimal = getPrecisionAndScale(typeName);
+    return DECIMAL(decimal.first, decimal.second);
+  }
   switch (typeKind) {
     case TypeKind::BOOLEAN:
       return BOOLEAN();
@@ -140,14 +144,6 @@ TypePtr toVeloxType(const std::string& typeName) {
     }
     case TypeKind::UNKNOWN:
       return UNKNOWN();
-    case TypeKind::SHORT_DECIMAL: {
-      auto shortDecimal = getPrecisionAndScale(typeName);
-      return SHORT_DECIMAL(shortDecimal.first, shortDecimal.second);
-    }
-    case TypeKind::LONG_DECIMAL: {
-      auto longDecimal = getPrecisionAndScale(typeName);
-      return LONG_DECIMAL(longDecimal.first, longDecimal.second);
-    }
     default:
       VELOX_NYI("Velox type conversion not supported for type {}.", typeName);
   }

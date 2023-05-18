@@ -53,8 +53,8 @@ void applyCastKernel(
   if constexpr (CppToType<To>::typeKind == TypeKind::VARCHAR) {
     std::string output;
     if constexpr (
-        CppToType<From>::typeKind == TypeKind::SHORT_DECIMAL ||
-        CppToType<From>::typeKind == TypeKind::LONG_DECIMAL) {
+        CppToType<From>::typeKind == TypeKind::BIGINT ||
+        CppToType<From>::typeKind == TypeKind::HUGEINT) {
       output = util::
           Converter<CppToType<To>::typeKind, void, Truncate, AllowDecimal>::
               cast(input->valueAt(row), nullOutput, input->type());
@@ -76,8 +76,8 @@ void applyCastKernel(
     }
   } else {
     if constexpr (
-        CppToType<From>::typeKind == TypeKind::SHORT_DECIMAL ||
-        CppToType<From>::typeKind == TypeKind::LONG_DECIMAL) {
+        CppToType<From>::typeKind == TypeKind::BIGINT ||
+        CppToType<From>::typeKind == TypeKind::HUGEINT) {
       auto output = util::
           Converter<CppToType<To>::typeKind, void, Truncate, AllowDecimal>::
               cast(input->valueAt(row), nullOutput, input->type());
@@ -378,14 +378,6 @@ void CastExpr::applyCast(
       return applyCastWithTry<To, Timestamp>(
           rows, context, input, resultFlatVector);
     }
-    case TypeKind::SHORT_DECIMAL: {
-      return applyCastWithTry<To, UnscaledShortDecimal>(
-          rows, context, input, resultFlatVector);
-    }
-    case TypeKind::LONG_DECIMAL: {
-      return applyCastWithTry<To, UnscaledLongDecimal>(
-          rows, context, input, resultFlatVector);
-    }
 
     default: {
       VELOX_UNSUPPORTED("Invalid from type in casting: {}", fromType);
@@ -629,7 +621,7 @@ VectorPtr CastExpr::applyDecimal(
   // toType is a decimal
   switch (fromType->kind()) {
     case TypeKind::BOOLEAN:
-      applyIntToDecimalCastKernel<bool, DecimalType>(
+      applyIntToDecimalCastKernel<bool, toDecimalType>(
           rows, input, context, toType, castResult);
       break;
     case TypeKind::TINYINT:
@@ -662,19 +654,19 @@ VectorPtr CastExpr::applyDecimal(
       }
     }
     case TypeKind::DATE:
-      applyDateToDecimalCastKernel<int32_t, DecimalType>(
+      applyDateToDecimalCastKernel<int32_t, toDecimalType>(
           rows, input, context, toType, castResult);
       break;
     case TypeKind::REAL:
-      applyDoubleToDecimalCastKernel<float, DecimalType>(
+      applyDoubleToDecimalCastKernel<float, toDecimalType>(
           rows, input, context, toType, castResult);
       break;
     case TypeKind::DOUBLE:
-      applyDoubleToDecimalCastKernel<double, DecimalType>(
+      applyDoubleToDecimalCastKernel<double, toDecimalType>(
           rows, input, context, toType, castResult);
       break;
     case TypeKind::VARCHAR:
-      applyVarCharToDecimalCastKernel<DecimalType>(
+      applyVarCharToDecimalCastKernel<toDecimalType>(
           rows, input, context, toType, castResult);
       break;
     default:

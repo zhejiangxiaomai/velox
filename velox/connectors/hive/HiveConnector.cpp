@@ -449,10 +449,10 @@ velox::variant convertFromString(const std::optional<std::string>& value) {
 velox::variant convertDecimalFromString(
     const std::optional<std::string>& value,
     const TypePtr& type) {
-  VELOX_CHECK(isDecimalKind(type->kind()), "Decimal type is expected.");
+  VELOX_CHECK(type->isDecimal(), "Decimal type is expected.");
   if (type->isShortDecimal()) {
     if (!value.has_value()) {
-      return variant::shortDecimal(std::nullopt, type);
+      return variant::null(TypeKind::BIGINT);
     }
     bool nullOutput = false;
     auto result = velox::util::Converter<TypeKind::BIGINT>::cast(
@@ -462,17 +462,18 @@ velox::variant convertDecimalFromString(
         "Failed to cast {} to {}",
         value.value(),
         TypeKind::BIGINT);
-    return variant::shortDecimal(result, type);
+    return variant(static_cast<int64_t>(result));
   }
 
   if (!value.has_value()) {
-    return variant::longDecimal(std::nullopt, type);
+    return variant::null(TypeKind::HUGEINT);
   }
   bool nullOutput = false;
   int128_t result =
       DecimalUtilOp::convertStringToInt128(value.value(), nullOutput);
   VELOX_CHECK(not nullOutput, "Failed to cast {} to int128", value.value());
-  return variant::longDecimal(result, type);
+  return variant(HugeInt::build(
+      static_cast<uint64_t>(result >> 64), static_cast<uint64_t>(result)));
 }
 
 } // namespace
@@ -755,7 +756,7 @@ void HiveDataSource::setPartitionValue(
       partitionKey);
   auto toTypeKind = it->second->dataType()->kind();
   velox::variant constantValue;
-  if (isDecimalKind(toTypeKind)) {
+  if (it->second->dataType()->isDecimal()) {
     constantValue = convertDecimalFromString(value, it->second->dataType());
   } else {
     constantValue = VELOX_DYNAMIC_SCALAR_TYPE_DISPATCH(

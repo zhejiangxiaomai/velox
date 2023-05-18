@@ -65,17 +65,9 @@ HashBuild::HashBuild(
       spillMemoryThreshold_(
           operatorCtx_->driverCtx()
               ->queryConfig()
-              .joinSpillMemoryThreshold()), // fixme should we use
-                                            // "hashBuildSpillMemoryThreshold"
-      spillConfig_(
-          joinNode_->canSpill(driverCtx->queryConfig())
-              ? operatorCtx_->makeSpillConfig(Spiller::Type::kHashJoinBuild)
-              : std::nullopt),
-      spillGroup_(
-          spillEnabled() ? operatorCtx_->task()->getSpillOperatorGroupLocked(
-                               operatorCtx_->driverCtx()->splitGroupId,
-                               planNodeId())
-                         : nullptr) {
+              .joinSpillMemoryThreshold()) // fixme should we use
+                                           // "hashBuildSpillMemoryThreshold"
+{
   VELOX_CHECK(pool()->trackUsage());
   VELOX_CHECK_NOT_NULL(joinBridge_);
 
@@ -445,11 +437,9 @@ bool HashBuild::reserveMemory(const RowVectorPtr& input) {
     return false;
   }
 
-  auto tracker = pool()->getMemoryUsageTracker();
-  VELOX_CHECK_NOT_NULL(tracker);
-  const auto currentUsage = tracker->currentBytes();
+  const auto currentUsage = pool()->currentBytes();
   if ((spillMemoryThreshold_ != 0 && currentUsage > spillMemoryThreshold_) ||
-      tracker->highUsage()) {
+      pool()->highUsage()) {
     const int64_t bytesToSpill =
         currentUsage * spillConfig()->spillableReservationGrowthPct / 100;
     numSpillRows_ = std::max<int64_t>(

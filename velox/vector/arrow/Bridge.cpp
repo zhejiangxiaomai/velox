@@ -1001,14 +1001,13 @@ VectorPtr createDecimalVector(
   VectorPtr base = BaseVector::create(type, arrowArray.length, pool);
   base->setNulls(nulls);
 
-  auto flatVector =
-      std::dynamic_pointer_cast<FlatVector<UnscaledShortDecimal>>(base);
+  auto flatVector = std::dynamic_pointer_cast<FlatVector<int64_t>>(base);
 
   for (int i = 0; i < arrowArray.length; i++) {
     if (!base->isNullAt(i)) {
       int128_t result;
       memcpy(&result, src + i * sizeof(int128_t), sizeof(int128_t));
-      flatVector->set(i, UnscaledShortDecimal(static_cast<int64_t>(result)));
+      flatVector->set(i, static_cast<int64_t>(result));
     }
   }
 

@@ -16,15 +16,64 @@
 
 #pragma once
 
+#include <boost/multiprecision/cpp_int.hpp>
 #include <string>
 #include "velox/common/base/CheckedArithmetic.h"
 #include "velox/common/base/Exceptions.h"
 #include "velox/type/DecimalUtil.h"
 #include "velox/type/Type.h"
-#include "velox/type/UnscaledLongDecimal.h"
-#include "velox/type/UnscaledShortDecimal.h"
 
 namespace facebook::velox {
+
+using int128_t = __int128_t;
+using boost::multiprecision::int256_t;
+using uint128_t = __uint128_t;
+
+static inline int64_t convertToInt64(int256_t in, bool* overflow) {
+  int64_t result;
+  constexpr int256_t UINT64_MASK = std::numeric_limits<uint64_t>::max();
+
+  int256_t inAbs = abs(in);
+  bool isNegative = in < 0;
+
+  uint128_t unsignResult = (inAbs & UINT64_MASK).convert_to<uint64_t>();
+  inAbs >>= 64;
+
+  if (inAbs > 0) {
+    // we've shifted in by 128-bit, so nothing should be left.
+    *overflow = true;
+  } else if (unsignResult > INT64_MAX) {
+    // the high-bit must not be set (signed 128-bit).
+    *overflow = true;
+  } else {
+    result = static_cast<int64_t>(unsignResult);
+  }
+  return isNegative ? -result : result;
+}
+
+static inline int128_t convertToInt128(int256_t in, bool* overflow) {
+  int128_t result;
+#ifndef INT128_MAX
+  int128_t INT128_MAX = int128_t(int128_t(-1L)) >> 1;
+#endif
+  constexpr int256_t UINT128_MASK = std::numeric_limits<uint128_t>::max();
+
+  int256_t inAbs = abs(in);
+  bool isNegative = in < 0;
+
+  uint128_t unsignResult = (inAbs & UINT128_MASK).convert_to<uint128_t>();
+  inAbs >>= 128;
+
+  if (inAbs > 0) {
+    // we've shifted in by 128-bit, so nothing should be left.
+    *overflow = true;
+  } else if (unsignResult > INT128_MAX) {
+    *overflow = true;
+  } else {
+    result = static_cast<int128_t>(unsignResult);
+  }
+  return isNegative ? -result : result;
+}
 
 class DecimalUtilOp {
  public:
@@ -47,13 +96,13 @@ class DecimalUtilOp {
   inline static int32_t maxBitsRequiredAfterScaling(
       const A& num,
       uint8_t aRescale) {
-    auto value = num.unscaledValue();
+    auto value = num;
     auto valueAbs = std::abs(value);
     int32_t num_occupied = 0;
-    if constexpr (std::is_same_v<A, UnscaledShortDecimal>) {
+    if constexpr (std::is_same_v<A, int64_t>) {
       num_occupied = 64 - bits::countLeadingZeros(valueAbs);
     } else {
-      num_occupied = 128 - num.countLeadingZeros();
+      num_occupied = 128 - bits::countLeadingZerosUint128(std::abs(num));
     }
 
     return num_occupied + maxBitsRequiredIncreaseAfterScaling(aRescale);
@@ -73,13 +122,21 @@ class DecimalUtilOp {
   template <typename A, typename B>
   inline static int32_t
   minLeadingZeros(const A& a, const B& b, uint8_t aScale, uint8_t bScale) {
-    auto x_value_abs = std::abs(a.unscaledValue());
+    auto x_value_abs = std::abs(a);
 
-    auto y_value_abs = std::abs(b.unscaledValue());
-    ;
-
-    int32_t x_lz = a.countLeadingZeros();
-    int32_t y_lz = b.countLeadingZeros();
+    auto y_value_abs = std::abs(b);
+    int32_t x_lz = 0;
+    int32_t y_lz = 0;
+    if constexpr (std::is_same_v<A, int128_t>) {
+      x_lz = bits::countLeadingZerosUint128(std::abs(a));
+    } else {
+      x_lz = bits::countLeadingZeros(a);
+    }
+    if constexpr (std::is_same_v<B, int128_t>) {
+      y_lz = bits::countLeadingZerosUint128(std::abs(b));
+    } else {
+      y_lz = bits::countLeadingZeros(b);
+    }
     if (aScale < bScale) {
       x_lz = minLeadingZerosAfterScaling(x_lz, bScale - aScale);
     } else if (aScale > bScale) {
@@ -97,7 +154,7 @@ class DecimalUtilOp {
       uint8_t aRescale,
       uint8_t /*bRescale*/,
       bool* overflow) {
-    if (b.unscaledValue() == 0) {
+    if (b == 0) {
       *overflow = true;
       return R(-1);
     }
@@ -118,8 +175,8 @@ class DecimalUtilOp {
     }
     auto bitsRequiredAfterScaling = maxBitsRequiredAfterScaling<A>(a, aRescale);
     if (bitsRequiredAfterScaling <= 127) {
-      unsignedDividendRescaled = unsignedDividendRescaled.multiply(
-          R(DecimalUtil::kPowersOfTen[aRescale]), overflow);
+      unsignedDividendRescaled = checkedMultiply<R>(
+          unsignedDividendRescaled, R(DecimalUtil::kPowersOfTen[aRescale]));
       if (*overflow) {
         return R(-1);
       }
@@ -131,16 +188,15 @@ class DecimalUtilOp {
       r = quotient * resultSign;
       return remainder;
     } else if constexpr (
-        std::is_same_v<R, UnscaledShortDecimal> ||
-        std::is_same_v<R, UnscaledLongDecimal>) {
+        std::is_same_v<R, int64_t> || std::is_same_v<R, int128_t>) {
       // Derives from Arrow BasicDecimal128 Divide
       if (aRescale > 38 && bitsRequiredAfterScaling > 255) {
         *overflow = true;
         return R(-1);
       }
-      int256_t aLarge = a.unscaledValue();
+      int256_t aLarge = a;
       int256_t x_large_scaled_up = aLarge * DecimalUtil::kPowersOfTen[aRescale];
-      int256_t y_large = b.unscaledValue();
+      int256_t y_large = b;
       int256_t result_large = x_large_scaled_up / y_large;
       int256_t remainder_large = x_large_scaled_up % y_large;
       // Since we are scaling up and then, scaling down, round-up the result (+1
@@ -152,15 +208,28 @@ class DecimalUtilOp {
         // x -ve and y -ve, result is +ve =>  (-1 ^ -1) + 1 =  0 + 1 = +1
         result_large += (aSign ^ bSign) + 1;
       }
-
-      auto result = R::convert(result_large, overflow);
-      auto remainder = R::convert(remainder_large, overflow);
-      if (!R::valueInRange(result.unscaledValue())) {
-        *overflow = true;
-      } else {
-        r = result;
+      if constexpr (std::is_same_v<R, int64_t>) {
+        auto result = convertToInt64(result_large, overflow);
+        auto remainder = convertToInt64(remainder_large, overflow);
+        if (!(result >= DecimalUtil::kLongDecimalMin &&
+              result <= DecimalUtil::kLongDecimalMax)) {
+          *overflow = true;
+        } else {
+          r = result;
+        }
+        return remainder;
       }
-      return remainder;
+      if constexpr (std::is_same_v<R, int128_t>) {
+        auto result = convertToInt128(result_large, overflow);
+        auto remainder = convertToInt128(remainder_large, overflow);
+        if (!(result >= DecimalUtil::kLongDecimalMin &&
+              result <= DecimalUtil::kLongDecimalMax)) {
+          *overflow = true;
+        } else {
+          r = result;
+        }
+        return remainder;
+      }
     } else {
       VELOX_FAIL("Should not reach here in DecimalUtilOp.h");
     }
@@ -235,16 +304,14 @@ class DecimalUtilOp {
       const int toPrecision,
       const int toScale) {
     static_assert(
-        std::is_same_v<TOutput, UnscaledShortDecimal> ||
-        std::is_same_v<TOutput, UnscaledLongDecimal>);
+        std::is_same_v<TOutput, int64_t> || std::is_same_v<TOutput, int128_t>);
     auto [unscaledStr, fromScale] = splitVarChar(inputValue);
     uint8_t fromPrecision = unscaledStr.size();
-    VELOX_CHECK_LE(
-        fromPrecision, DecimalType<TypeKind::LONG_DECIMAL>::kMaxPrecision);
+    VELOX_CHECK_LE(fromPrecision, LongDecimalType::kMaxPrecision);
     if (fromPrecision <= 18) {
       int64_t fromUnscaledValue = folly::to<int64_t>(unscaledStr);
-      return DecimalUtil::rescaleWithRoundUp<UnscaledShortDecimal, TOutput>(
-          UnscaledShortDecimal(fromUnscaledValue),
+      return DecimalUtil::rescaleWithRoundUp<int64_t, TOutput>(
+          fromUnscaledValue,
           fromPrecision,
           fromScale,
           toPrecision,
@@ -261,8 +328,8 @@ class DecimalUtilOp {
             toPrecision,
             toScale);
       }
-      return DecimalUtil::rescaleWithRoundUp<UnscaledLongDecimal, TOutput>(
-          UnscaledLongDecimal(decimalValue),
+      return DecimalUtil::rescaleWithRoundUp<int128_t, TOutput>(
+          decimalValue,
           fromPrecision,
           fromScale,
           toPrecision,
@@ -278,8 +345,7 @@ class DecimalUtilOp {
       const int toPrecision,
       const int toScale) {
     static_assert(
-        std::is_same_v<TOutput, UnscaledShortDecimal> ||
-        std::is_same_v<TOutput, UnscaledLongDecimal>);
+        std::is_same_v<TOutput, int64_t> || std::is_same_v<TOutput, int128_t>);
     auto str = velox::to<std::string>(inputValue);
     auto stringView = StringView(str.c_str(), str.size());
     return rescaleVarchar<TOutput>(stringView, toPrecision, toScale);

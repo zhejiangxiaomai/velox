@@ -124,17 +124,13 @@ class DecimalUtil {
       } else {
         VELOX_USER_FAIL(
             "Cannot cast DECIMAL '{}' to DECIMAL({},{})",
-            DecimalUtil::toString<TInput>(
+            DecimalUtil::toString(
                 inputValue, DECIMAL(fromPrecision, fromScale)),
             toPrecision,
             toScale);
       }
     }
-    if constexpr (std::is_same_v<TOutput, UnscaledShortDecimal>) {
-      return UnscaledShortDecimal(static_cast<int64_t>(rescaledValue));
-    } else {
-      return UnscaledLongDecimal(rescaledValue);
-    }
+    return static_cast<TOutput>(rescaledValue);
   }
 
   template <typename TInput, typename TOutput>
@@ -143,8 +139,7 @@ class DecimalUtil {
       const int toPrecision,
       const int toScale) {
     static_assert(
-        std::is_same_v<TOutput, UnscaledShortDecimal> ||
-        std::is_same_v<TOutput, UnscaledLongDecimal>);
+        std::is_same_v<TOutput, int64_t> || std::is_same_v<TOutput, int128_t>);
 
     // Multiply decimal with the scale
     auto unscaled = inputValue * DecimalUtil::kPowersOfTen[toScale];
@@ -161,13 +156,13 @@ class DecimalUtil {
     uint64_t low_bits = static_cast<uint64_t>(
         unscaled_abs - std::ldexp(static_cast<double>(high_bits), 64));
 
-    auto rescaledValue = buildInt128(high_bits, low_bits);
+    auto rescaledValue = HugeInt::build(high_bits, low_bits);
 
     if (rescaledValue < -DecimalUtil::kPowersOfTen[toPrecision] ||
         rescaledValue > DecimalUtil::kPowersOfTen[toPrecision] || isOverflow) {
       VELOX_USER_FAIL(
           "Cannot cast DECIMAL '{}' to DECIMAL({},{})",
-          DecimalUtil::toString(inputValue, DECIMAL(fromPrecision, fromScale)),
+          inputValue,
           toPrecision,
           toScale);
     }

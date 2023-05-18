@@ -127,7 +127,7 @@ class DecimalArithmeticTest : public SparkFunctionBaseTest {
 }; // namespace
 
 TEST_F(DecimalArithmeticTest, tmp) {
-  testDecimalExpr<TypeKind::LONG_DECIMAL>(
+  testDecimalExpr<TypeKind::HUGEINT>(
       makeLongDecimalFlatVector({2123210}, DECIMAL(38, 6)),
       "decimal_add(c0, c1)",
       {makeLongDecimalFlatVector({11232100}, DECIMAL(38, 7)),
@@ -147,55 +147,55 @@ TEST_F(DecimalArithmeticTest, add) {
   //   }
 
   // Precision < 38
-  testDecimalExpr<TypeKind::LONG_DECIMAL>(
+  testDecimalExpr<TypeKind::HUGEINT>(
       makeLongDecimalFlatVector({502}, DECIMAL(31, 3)),
       "decimal_add(c0, c1)",
       {makeLongDecimalFlatVector({201}, DECIMAL(30, 3)),
        makeLongDecimalFlatVector({301}, DECIMAL(30, 3))});
 
   // Min leading zero >= 3
-  testDecimalExpr<TypeKind::LONG_DECIMAL>(
+  testDecimalExpr<TypeKind::HUGEINT>(
       makeLongDecimalFlatVector({2123210}, DECIMAL(38, 6)),
       "decimal_add(c0, c1)",
       {makeLongDecimalFlatVector({11232100}, DECIMAL(38, 7)),
        makeShortDecimalFlatVector({1}, DECIMAL(10, 0))});
 
   // Carry to left 0.
-  testDecimalExpr<TypeKind::LONG_DECIMAL>(
+  testDecimalExpr<TypeKind::HUGEINT>(
       makeLongDecimalVector({"99999999999999999999999999999990000010"}, 38, 6),
       "decimal_add(c0, c1)",
       {makeLongDecimalVector({"9999999999999999999999999999999000000"}, 38, 5),
        makeLongDecimalFlatVector({100}, DECIMAL(38, 7))});
 
   // Carry to left 1
-  testDecimalExpr<TypeKind::LONG_DECIMAL>(
+  testDecimalExpr<TypeKind::HUGEINT>(
       makeLongDecimalVector({"99999999999999999999999999999991500000"}, 38, 6),
       "decimal_add(c0, c1)",
       {makeLongDecimalVector({"9999999999999999999999999999999070000"}, 38, 5),
        makeLongDecimalFlatVector({8000000}, DECIMAL(38, 7))});
 
   //   Both -ve
-  testDecimalExpr<TypeKind::LONG_DECIMAL>(
+  testDecimalExpr<TypeKind::HUGEINT>(
       makeLongDecimalFlatVector({-3211}, DECIMAL(32, 3)),
       "decimal_add(c0, c1)",
       {makeLongDecimalFlatVector({-201}, DECIMAL(30, 3)),
        makeLongDecimalFlatVector({-301}, DECIMAL(30, 2))});
 
   // -ve and max precision
-  testDecimalExpr<TypeKind::LONG_DECIMAL>(
+  testDecimalExpr<TypeKind::HUGEINT>(
       makeLongDecimalVector({"-99999999999999999999999999999990000010"}, 38, 6),
       "decimal_add(c0, c1)",
       {makeLongDecimalVector(
            {"-09999999999999999999999999999999000000"}, 38, 5),
        makeLongDecimalFlatVector({-100}, DECIMAL(38, 7))});
   // ve and -ve
-  testDecimalExpr<TypeKind::LONG_DECIMAL>(
+  testDecimalExpr<TypeKind::HUGEINT>(
       makeLongDecimalVector({"99999999999999999999999999999989999990"}, 38, 6),
       "decimal_add(c0, c1)",
       {makeLongDecimalVector({"9999999999999999999999999999999000000"}, 38, 5),
        makeLongDecimalFlatVector({-100}, DECIMAL(38, 7))});
   // -ve and ve
-  testDecimalExpr<TypeKind::LONG_DECIMAL>(
+  testDecimalExpr<TypeKind::HUGEINT>(
       makeLongDecimalVector({"99999999999999999999999999999989999990"}, 38, 6),
       "decimal_add(c0, c1)",
       {makeLongDecimalFlatVector({-100}, DECIMAL(38, 7)),

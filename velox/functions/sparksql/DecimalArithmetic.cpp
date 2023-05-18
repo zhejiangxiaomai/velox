@@ -203,11 +203,9 @@ class Addition {
 #endif
 #endif
   {
-    if (rPrecision < DecimalType<TypeKind::LONG_DECIMAL>::kMaxPrecision) {
-      int128_t aRescaled =
-          a.unscaledValue() * DecimalUtil::kPowersOfTen[aRescale];
-      int128_t bRescaled =
-          b.unscaledValue() * DecimalUtil::kPowersOfTen[bRescale];
+    if (rPrecision < LongDecimalType::kMaxPrecision) {
+      int128_t aRescaled = a * DecimalUtil::kPowersOfTen[aRescale];
+      int128_t bRescaled = b * DecimalUtil::kPowersOfTen[bRescale];
       r = R(aRescaled + bRescaled);
     } else {
       int32_t minLz =
@@ -219,10 +217,8 @@ class Addition {
         // decimal because 2^126 - 1 < 10^38 - 1. If both x and y have at least
         // 3 leading zeros, then we are guaranteed that the result will have at
         // lest 2 leading zeros.
-        int128_t aRescaled =
-            a.unscaledValue() * DecimalUtil::kPowersOfTen[aRescale];
-        int128_t bRescaled =
-            b.unscaledValue() * DecimalUtil::kPowersOfTen[bRescale];
+        int128_t aRescaled = a * DecimalUtil::kPowersOfTen[aRescale];
+        int128_t bRescaled = b * DecimalUtil::kPowersOfTen[bRescale];
         auto higherScale = std::max(aScale, bScale);
         int128_t sum = aRescaled + bRescaled;
         r = checkAndReduceScale<R>(R(sum), higherScale - rScale);
@@ -271,18 +267,13 @@ class Addition {
       uint8_t aScale,
       uint8_t bScale,
       int32_t rScale) {
-    if (a.unscaledValue() >= 0 && b.unscaledValue() >= 0) {
+    if (a >= 0 && b >= 0) {
       // both positive or 0
       return addLargePositive<R, A, B>(a, b, aScale, bScale, rScale);
-    } else if (a.unscaledValue() <= 0 && b.unscaledValue() <= 0) {
+    } else if (a <= 0 && b <= 0) {
       // both negative or 0
-      return R(-addLargePositive<R, A, B>(
-                    A(-a.unscaledValue()),
-                    B(-b.unscaledValue()),
-                    aScale,
-                    bScale,
-                    rScale)
-                    .unscaledValue());
+      return R(
+          -addLargePositive<R, A, B>(A(-a), B(-b), aScale, bScale, rScale));
     } else {
       // one positive and the other negative
       return addLargeNegative<R, A, B>(a, b, aScale, bScale, rScale);
@@ -292,16 +283,13 @@ class Addition {
   template <typename A>
   inline static void
   getWholeAndFraction(const A& value, uint32_t scale, A& whole, A& fraction) {
-    whole = A(value.unscaledValue() / DecimalUtil::kPowersOfTen[scale]);
-    fraction =
-        A(value.unscaledValue() -
-          whole.unscaledValue() * DecimalUtil::kPowersOfTen[scale]);
+    whole = A(value / DecimalUtil::kPowersOfTen[scale]);
+    fraction = A(value - whole * DecimalUtil::kPowersOfTen[scale]);
   }
 
   template <typename A>
   inline static int128_t checkAndIncreaseScale(const A& in, int16_t delta) {
-    return (delta <= 0) ? in.unscaledValue()
-                        : in.unscaledValue() * DecimalUtil::kPowersOfTen[delta];
+    return (delta <= 0) ? in : in * DecimalUtil::kPowersOfTen[delta];
   }
 
   template <typename A>
@@ -326,8 +314,8 @@ class Addition {
       uint8_t aScale,
       uint8_t bScale,
       uint8_t rScale) {
-    VELOX_DCHECK_GE(a.unscaledValue(), 0);
-    VELOX_DCHECK_GE(b.unscaledValue(), 0);
+    VELOX_DCHECK_GE(a, 0);
+    VELOX_DCHECK_GE(b, 0);
 
     // separate out whole/fractions.
     A aLeft, aRight;
@@ -356,8 +344,7 @@ class Addition {
     right = checkAndReduceScale<R>(R(right), higher_scale - rScale);
 
     auto left = R(aLeft) + R(bLeft) + R(carry_to_left);
-    return R(left.unscaledValue() * DecimalUtil::kPowersOfTen[rScale]) +
-        R(right);
+    return R(left * DecimalUtil::kPowersOfTen[rScale]) + R(right);
   }
 
   /// x_value and y_value cannot be 0, and one must be positive and the other
@@ -369,11 +356,9 @@ class Addition {
       uint8_t aScale,
       uint8_t bScale,
       int32_t rScale) {
-    VELOX_DCHECK_NE(a.unscaledValue(), 0);
-    VELOX_DCHECK_NE(b.unscaledValue(), 0);
-    VELOX_DCHECK(
-        (a.unscaledValue() < 0 && b.unscaledValue() > 0) ||
-        (a.unscaledValue() > 0 && b.unscaledValue() < 0));
+    VELOX_DCHECK_NE(a, 0);
+    VELOX_DCHECK_NE(b, 0);
+    VELOX_DCHECK((a < 0 && b > 0) || (a > 0 && b < 0));
 
     // separate out whole/fractions.
     A aLeft, aRight;
@@ -389,8 +374,7 @@ class Addition {
         checkAndIncreaseScale<B>(bRight, higher_scale - bScale);
 
     // Overflow not possible because one is +ve and the other is -ve.
-    int128_t left = static_cast<int128_t>(aLeft.unscaledValue()) +
-        static_cast<int128_t>(bLeft.unscaledValue());
+    int128_t left = static_cast<int128_t>(aLeft) + static_cast<int128_t>(bLeft);
     auto right = aRightScaled + bRightScaled;
 
     // If the whole and fractional parts have different signs, then we need to
@@ -403,8 +387,7 @@ class Addition {
       left -= 1;
       right += DecimalUtil::kPowersOfTen[higher_scale];
     }
-    right =
-        checkAndReduceScale(R(right), higher_scale - rScale).unscaledValue();
+    right = checkAndReduceScale(R(right), higher_scale - rScale);
     return R((left * DecimalUtil::kPowersOfTen[rScale]) + right);
   }
 };
@@ -428,7 +411,7 @@ class Subtraction {
     Addition::apply<R, A, B>(
         r,
         a,
-        B(-b.unscaledValue()),
+        B(-b),
         aRescale,
         bRescale,
         aPrecision,
@@ -474,19 +457,19 @@ class Multiply {
     // derive from Arrow
     if (rPrecision < 38) {
       auto res = checkedMultiply<R>(
-          R(a).multiply(R(b), overflow),
+          checkedMultiply<R>(a, b),
           R(DecimalUtil::kPowersOfTen[aRescale + bRescale]));
       if (!*overflow) {
         r = res;
       }
-    } else if (a.unscaledValue() == 0 && b.unscaledValue() == 0) {
+    } else if (a == 0 && b == 0) {
       // Handle this separately to avoid divide-by-zero errors.
       r = R(0);
     } else {
       auto deltaScale = aScale + bScale - rScale;
       if (deltaScale == 0) {
         // No scale down
-        auto res = R(a).multiply(R(b), overflow);
+        auto res = checkedMultiply<R>(a, b);
         if (!*overflow) {
           r = res;
         }
@@ -494,26 +477,44 @@ class Multiply {
         // scale down
         // It's possible that the intermediate value does not fit in 128-bits,
         // but the final value will (after scaling down).
-        int32_t total_leading_zeros =
-            a.countLeadingZeros() + b.countLeadingZeros();
+        int32_t countLeadingZerosA = 0;
+        int32_t countLeadingZerosB = 0;
+        if constexpr (std::is_same_v<A, int128_t>) {
+          countLeadingZerosA = bits::countLeadingZerosUint128(std::abs(a));
+        } else {
+          countLeadingZerosA = bits::countLeadingZeros(a);
+        }
+        if constexpr (std::is_same_v<B, int128_t>) {
+          countLeadingZerosB = bits::countLeadingZerosUint128(std::abs(b));
+        } else {
+          countLeadingZerosB = bits::countLeadingZeros(b);
+        }
+        int32_t total_leading_zeros = countLeadingZerosA + countLeadingZerosB;
         // This check is quick, but conservative. In some cases it will
         // indicate that converting to 256 bits is necessary, when it's not
         // actually the case.
         if (UNLIKELY(total_leading_zeros <= 128)) {
           // needs_int256
-          int256_t aLarge = a.unscaledValue();
-          int256_t blarge = b.unscaledValue();
+          int256_t aLarge = a;
+          int256_t blarge = b;
           int256_t reslarge = aLarge * blarge;
           reslarge = ReduceScaleBy(reslarge, deltaScale);
-          auto res = R::convert(reslarge, overflow);
-          if (!*overflow) {
-            r = res;
+          if constexpr (std::is_same_v<B, int128_t>) {
+            auto res = convertToInt128(reslarge, overflow);
+            if (!*overflow) {
+              r = res;
+            }
+          } else {
+            auto res = convertToInt64(reslarge, overflow);
+            if (!*overflow) {
+              r = res;
+            }
           }
         } else {
           if (LIKELY(deltaScale <= 38)) {
             // The largest value that result can have here is (2^64 - 1) * (2^63
             // - 1), which is greater than BasicDecimal128::kMaxValue.
-            auto res = R(a).multiply(R(b), overflow);
+            auto res = checkedMultiply<R>(a, b);
             VELOX_DCHECK(!*overflow);
             // Since deltaScale is greater than zero, result can now be at most
             // ((2^64 - 1) * (2^63 - 1)) / 10, which is less than
@@ -681,14 +682,14 @@ std::shared_ptr<exec::VectorFunction> createDecimalFunction(
       aPrecision, aScale, bPrecision, bScale);
   uint8_t aRescale = Operation::computeRescaleFactor(aScale, bScale, rScale);
   uint8_t bRescale = Operation::computeRescaleFactor(bScale, aScale, rScale);
-  if (aType->kind() == TypeKind::SHORT_DECIMAL) {
-    if (bType->kind() == TypeKind::SHORT_DECIMAL) {
-      if (rPrecision > DecimalType<TypeKind::SHORT_DECIMAL>::kMaxPrecision) {
+  if (aType->isShortDecimal()) {
+    if (bType->isShortDecimal()) {
+      if (rPrecision > ShortDecimalType::kMaxPrecision) {
         // Arguments are short decimals and result is a long decimal.
         return std::make_shared<DecimalBaseFunction<
-            UnscaledLongDecimal /*result*/,
-            UnscaledShortDecimal,
-            UnscaledShortDecimal,
+            int128_t /*result*/,
+            int64_t,
+            int64_t,
             Operation>>(
             aRescale,
             bRescale,
@@ -698,13 +699,13 @@ std::shared_ptr<exec::VectorFunction> createDecimalFunction(
             bScale,
             rPrecision,
             rScale,
-            LONG_DECIMAL(rPrecision, rScale));
+            DECIMAL(rPrecision, rScale));
       } else {
         // Arguments are short decimals and result is a short decimal.
         return std::make_shared<DecimalBaseFunction<
-            UnscaledShortDecimal /*result*/,
-            UnscaledShortDecimal,
-            UnscaledShortDecimal,
+            int64_t /*result*/,
+            int64_t,
+            int64_t,
             Operation>>(
             aRescale,
             bRescale,
@@ -714,15 +715,15 @@ std::shared_ptr<exec::VectorFunction> createDecimalFunction(
             bScale,
             rPrecision,
             rScale,
-            SHORT_DECIMAL(rPrecision, rScale));
+            DECIMAL(rPrecision, rScale));
       }
     } else {
       // LHS is short decimal and rhs is a long decimal, result is long
       // decimal.
       return std::make_shared<DecimalBaseFunction<
-          UnscaledLongDecimal /*result*/,
-          UnscaledShortDecimal,
-          UnscaledLongDecimal,
+          int128_t /*result*/,
+          int64_t,
+          int128_t,
           Operation>>(
           aRescale,
           bRescale,
@@ -732,16 +733,16 @@ std::shared_ptr<exec::VectorFunction> createDecimalFunction(
           bScale,
           rPrecision,
           rScale,
-          LONG_DECIMAL(rPrecision, rScale));
+          DECIMAL(rPrecision, rScale));
     }
   } else {
-    if (bType->kind() == TypeKind::SHORT_DECIMAL) {
+    if (bType->isShortDecimal()) {
       // LHS is long decimal and rhs is short decimal, result is a long
       // decimal.
       return std::make_shared<DecimalBaseFunction<
-          UnscaledLongDecimal /*result*/,
-          UnscaledLongDecimal,
-          UnscaledShortDecimal,
+          int128_t /*result*/,
+          int128_t,
+          int64_t,
           Operation>>(
           aRescale,
           bRescale,
@@ -751,13 +752,13 @@ std::shared_ptr<exec::VectorFunction> createDecimalFunction(
           bScale,
           rPrecision,
           rScale,
-          LONG_DECIMAL(rPrecision, rScale));
+          DECIMAL(rPrecision, rScale));
     } else {
       // Arguments and result are all long decimals.
       return std::make_shared<DecimalBaseFunction<
-          UnscaledLongDecimal /*result*/,
-          UnscaledLongDecimal,
-          UnscaledLongDecimal,
+          int128_t /*result*/,
+          int128_t,
+          int128_t,
           Operation>>(
           aRescale,
           bRescale,
@@ -767,7 +768,7 @@ std::shared_ptr<exec::VectorFunction> createDecimalFunction(
           bScale,
           rPrecision,
           rScale,
-          LONG_DECIMAL(rPrecision, rScale));
+          DECIMAL(rPrecision, rScale));
     }
   }
   VELOX_UNSUPPORTED();

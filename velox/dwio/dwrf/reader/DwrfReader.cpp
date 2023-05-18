@@ -17,6 +17,7 @@
 #include "velox/dwio/dwrf/reader/DwrfReader.h"
 #include "velox/dwio/common/TypeUtils.h"
 #include "velox/dwio/common/exception/Exception.h"
+#include "velox/type/DecimalUtilOp.h"
 #include "velox/vector/FlatVector.h"
 
 namespace facebook::velox::dwrf {
@@ -519,10 +520,7 @@ std::optional<size_t> DwrfRowReader::estimatedRowSizeHelper(
       }
       return totalEstimate;
     }
-    case TypeKind::SHORT_DECIMAL: {
-      return valueCount * sizeof(uint64_t);
-    }
-    case TypeKind::LONG_DECIMAL: {
+    case TypeKind::HUGEINT: {
       return valueCount * sizeof(uint128_t);
     }
     default:

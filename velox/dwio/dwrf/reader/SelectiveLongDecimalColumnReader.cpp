@@ -93,8 +93,8 @@ void SelectiveLongDecimalColumnReader::getValues(
       : nullptr;
 
   auto decimalValues =
-      AlignedBuffer::allocate<UnscaledLongDecimal>(numValues_, &memoryPool_);
-  auto rawDecimalValues = decimalValues->asMutable<UnscaledLongDecimal>();
+      AlignedBuffer::allocate<int128_t>(numValues_, &memoryPool_);
+  auto rawDecimalValues = decimalValues->asMutable<int128_t>();
 
   auto scales = scaleBuffer_->as<int64_t>();
   auto values = values_->as<int128_t>();
@@ -107,14 +107,13 @@ void SelectiveLongDecimalColumnReader::getValues(
 
       scaleInt128(value, scale_, currentScale);
 
-      rawDecimalValues[i] = UnscaledLongDecimal(value);
+      rawDecimalValues[i] = value;
     }
   }
 
   values_ = decimalValues;
   rawValues_ = values_->asMutable<char>();
-  getFlatValues<UnscaledLongDecimal, UnscaledLongDecimal>(
-      rows, result, type_, true);
+  getFlatValues<int128_t, int128_t>(rows, result, type_, true);
 }
 
 } // namespace facebook::velox::dwrf

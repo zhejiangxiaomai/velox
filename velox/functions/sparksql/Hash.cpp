@@ -71,8 +71,7 @@ void applyWithType(
       CASE(REAL, hash.hashFloat, float);
       CASE(DOUBLE, hash.hashDouble, double);
       CASE(DATE, hash.hashDate, int32_t);
-      CASE(SHORT_DECIMAL, hash.hashShortDecimal, UnscaledShortDecimal)
-      CASE(LONG_DECIMAL, hash.hashLongDecimal, UnscaledLongDecimal)
+      CASE(HUGEINT, hash.hashInt128, int128_t)
 
 #undef CASE
       default:
@@ -144,12 +143,8 @@ class Murmur3Hash final {
     return hashInt32(input.days(), seed);
   }
 
-  uint32_t hashShortDecimal(UnscaledShortDecimal input, uint32_t seed) {
-    return hashInt64(input.unscaledValue(), seed);
-  }
-
-  uint32_t hashLongDecimal(UnscaledLongDecimal input, uint32_t seed) {
-    char* data = DecimalUtil::ToByteArray(input.unscaledValue());
+  uint32_t hashInt128(int128_t input, uint32_t seed) {
+    char* data = DecimalUtil::ToByteArray(input);
     auto value = hashBytes(StringView(data, 16), seed);
     delete data;
     return value;
@@ -259,12 +254,8 @@ class XxHash64 final {
     return hashInt32(input.days(), seed);
   }
 
-  uint32_t hashShortDecimal(UnscaledShortDecimal input, uint32_t seed) {
-    return hashInt64(input.unscaledValue(), seed);
-  }
-
-  uint32_t hashLongDecimal(UnscaledLongDecimal input, uint32_t seed) {
-    char* data = DecimalUtil::ToByteArray(input.unscaledValue());
+  uint32_t hashInt128(int128_t input, uint32_t seed) {
+    char* data = DecimalUtil::ToByteArray(input);
     auto value = hashBytes(StringView(data, 16), seed);
     delete data;
     return value;

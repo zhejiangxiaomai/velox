@@ -48,7 +48,7 @@ class DecimalSumAggregate : public exec::Aggregate {
   /// Use UnscaledLongDecimal instead of int128_t because some CPUs don't
   /// support misaligned access to int128_t type.
   int32_t accumulatorAlignmentSize() const override {
-    return static_cast<int32_t>(sizeof(UnscaledLongDecimal));
+    return static_cast<int32_t>(sizeof(int128_t));
   }
 
   void initializeNewGroups(
@@ -60,9 +60,7 @@ class DecimalSumAggregate : public exec::Aggregate {
     }
   }
 
-  UnscaledLongDecimal computeFinalValue(
-      DecimalSum* decimalSum,
-      const TypePtr sumType) {
+  int128_t computeFinalValue(DecimalSum* decimalSum, const TypePtr sumType) {
     int128_t sum = decimalSum->sum;
     if ((decimalSum->overflow == 1 && decimalSum->sum < 0) ||
         (decimalSum->overflow == -1 && decimalSum->sum > 0)) {
@@ -83,7 +81,7 @@ class DecimalSumAggregate : public exec::Aggregate {
         (sum >= resultMin) && (sum <= resultMax),
         "overflow: sum value not in result decimal range");
 
-    return UnscaledLongDecimal(sum);
+    return sum;
   }
 
   void extractValues(char** groups, int32_t numGroups, VectorPtr* result)
@@ -171,7 +169,7 @@ class DecimalSumAggregate : public exec::Aggregate {
       if (!decodedRaw_.isNullAt(0)) {
         auto value = decodedRaw_.valueAt<TInputType>(0);
         rows.applyToSelected([&](vector_size_t i) {
-          updateNonNullValue(groups[i], UnscaledLongDecimal(value), false);
+          updateNonNullValue(groups[i], value, false);
         });
       }
     } else if (decodedRaw_.mayHaveNulls()) {
@@ -180,22 +178,17 @@ class DecimalSumAggregate : public exec::Aggregate {
           return;
         }
         updateNonNullValue(
-            groups[i],
-            UnscaledLongDecimal(decodedRaw_.valueAt<TInputType>(i)),
-            false);
+            groups[i], decodedRaw_.valueAt<TInputType>(i), false);
       });
     } else if (!exec::Aggregate::numNulls_ && decodedRaw_.isIdentityMapping()) {
       auto data = decodedRaw_.data<TInputType>();
       rows.applyToSelected([&](vector_size_t i) {
-        updateNonNullValue<false>(
-            groups[i], UnscaledLongDecimal(data[i]), false);
+        updateNonNullValue<false>(groups[i], data[i], false);
       });
     } else {
       rows.applyToSelected([&](vector_size_t i) {
         updateNonNullValue(
-            groups[i],
-            UnscaledLongDecimal(decodedRaw_.valueAt<TInputType>(i)),
-            false);
+            groups[i], decodedRaw_.valueAt<TInputType>(i), false);
       });
     }
   }
@@ -209,19 +202,15 @@ class DecimalSumAggregate : public exec::Aggregate {
     if (decodedRaw_.isConstantMapping()) {
       if (!decodedRaw_.isNullAt(0)) {
         auto value = decodedRaw_.valueAt<TInputType>(0);
-        rows.template applyToSelected([&](vector_size_t i) {
-          updateNonNullValue(group, UnscaledLongDecimal(value), false);
-        });
+        rows.template applyToSelected(
+            [&](vector_size_t i) { updateNonNullValue(group, value, false); });
       } else {
         clearNull(group);
       }
     } else if (decodedRaw_.mayHaveNulls()) {
       rows.applyToSelected([&](vector_size_t i) {
         if (!decodedRaw_.isNullAt(i)) {
-          updateNonNullValue(
-              group,
-              UnscaledLongDecimal(decodedRaw_.valueAt<TInputType>(i)),
-              false);
+          updateNonNullValue(group, decodedRaw_.valueAt<TInputType>(i), false);
         } else {
           clearNull(group);
         }
@@ -231,7 +220,7 @@ class DecimalSumAggregate : public exec::Aggregate {
       DecimalSum decimalSum;
       rows.applyToSelected([&](vector_size_t i) {
         decimalSum.overflow += DecimalUtil::addWithOverflow(
-            decimalSum.sum, data[i].unscaledValue(), decimalSum.sum);
+            decimalSum.sum, data[i], decimalSum.sum);
         decimalSum.isEmpty = false;
       });
       mergeAccumulators(group, decimalSum);
@@ -239,9 +228,7 @@ class DecimalSumAggregate : public exec::Aggregate {
       DecimalSum decimalSum;
       rows.applyToSelected([&](vector_size_t i) {
         decimalSum.overflow += DecimalUtil::addWithOverflow(
-            decimalSum.sum,
-            decodedRaw_.valueAt<TInputType>(i).unscaledValue(),
-            decimalSum.sum);
+            decimalSum.sum, decodedRaw_.valueAt<TInputType>(i), decimalSum.sum);
         decimalSum.isEmpty = false;
       });
       mergeAccumulators(group, decimalSum);
@@ -268,7 +255,7 @@ class DecimalSumAggregate : public exec::Aggregate {
         auto isEmpty = isEmptyVector->valueAt(decodedIndex);
         rows.applyToSelected([&](vector_size_t i) {
           clearNull(groups[i]);
-          updateNonNullValue(groups[i], UnscaledLongDecimal(sum), isEmpty);
+          updateNonNullValue(groups[i], sum, isEmpty);
         });
       } else {
         auto decodedIndex = decodedPartial_.index(0);
@@ -295,7 +282,7 @@ class DecimalSumAggregate : public exec::Aggregate {
         auto decodedIndex = decodedPartial_.index(i);
         auto sum = sumVector->valueAt(decodedIndex);
         auto isEmpty = isEmptyVector->valueAt(decodedIndex);
-        updateNonNullValue(groups[i], UnscaledLongDecimal(sum), isEmpty);
+        updateNonNullValue(groups[i], sum, isEmpty);
       });
     } else {
       rows.applyToSelected([&](vector_size_t i) {
@@ -303,7 +290,7 @@ class DecimalSumAggregate : public exec::Aggregate {
         auto decodedIndex = decodedPartial_.index(i);
         auto sum = sumVector->valueAt(decodedIndex);
         auto isEmpty = isEmptyVector->valueAt(decodedIndex);
-        updateNonNullValue(groups[i], UnscaledLongDecimal(sum), isEmpty);
+        updateNonNullValue(groups[i], sum, isEmpty);
       });
     }
   }
@@ -327,9 +314,8 @@ class DecimalSumAggregate : public exec::Aggregate {
         if (rows.hasSelections()) {
           clearNull(group);
         }
-        rows.applyToSelected([&](vector_size_t i) {
-          updateNonNullValue(group, UnscaledLongDecimal(sum), isEmpty);
-        });
+        rows.applyToSelected(
+            [&](vector_size_t i) { updateNonNullValue(group, sum, isEmpty); });
       } else {
         auto decodedIndex = decodedPartial_.index(0);
         if ((!isEmptyVector->isNullAt(decodedIndex) &&
@@ -345,7 +331,7 @@ class DecimalSumAggregate : public exec::Aggregate {
           auto decodedIndex = decodedPartial_.index(i);
           auto sum = sumVector->valueAt(decodedIndex);
           auto isEmpty = isEmptyVector->valueAt(decodedIndex);
-          updateNonNullValue(group, UnscaledLongDecimal(sum), isEmpty);
+          updateNonNullValue(group, sum, isEmpty);
         } else {
           // if isEmpty is false and if sum is null, then it means
           // we have had an overflow
@@ -365,21 +351,20 @@ class DecimalSumAggregate : public exec::Aggregate {
         auto decodedIndex = decodedPartial_.index(i);
         auto sum = sumVector->valueAt(decodedIndex);
         auto isEmpty = isEmptyVector->valueAt(decodedIndex);
-        updateNonNullValue(group, UnscaledLongDecimal(sum), isEmpty);
+        updateNonNullValue(group, sum, isEmpty);
       });
     }
   }
 
  private:
   template <bool tableHasNulls = true>
-  inline void
-  updateNonNullValue(char* group, UnscaledLongDecimal value, bool isEmpty) {
+  inline void updateNonNullValue(char* group, int128_t value, bool isEmpty) {
     if constexpr (tableHasNulls) {
       exec::Aggregate::clearNull(group);
     }
     auto decimalSum = accumulator(group);
-    decimalSum->overflow += DecimalUtil::addWithOverflow(
-        decimalSum->sum, value.unscaledValue(), decimalSum->sum);
+    decimalSum->overflow +=
+        DecimalUtil::addWithOverflow(decimalSum->sum, value, decimalSum->sum);
     decimalSum->isEmpty &= isEmpty;
   }
 
@@ -426,27 +411,27 @@ bool registerDecimalSumAggregate(const std::string& name) {
           const TypePtr& resultType) -> std::unique_ptr<exec::Aggregate> {
         VELOX_CHECK_EQ(argTypes.size(), 1, "{} takes only one argument", name);
         auto& inputType = argTypes[0];
+        if (inputType->isShortDecimal()) {
+          return std::make_unique<DecimalSumAggregate<int64_t, int128_t>>(
+              resultType);
+        }
+        if (inputType->isLongDecimal()) {
+          return std::make_unique<DecimalSumAggregate<int128_t, int128_t>>(
+              resultType);
+        }
         switch (inputType->kind()) {
-          case TypeKind::SHORT_DECIMAL:
-            return std::make_unique<
-                DecimalSumAggregate<UnscaledShortDecimal, UnscaledLongDecimal>>(
-                resultType);
-          case TypeKind::LONG_DECIMAL:
-            return std::make_unique<
-                DecimalSumAggregate<UnscaledLongDecimal, UnscaledLongDecimal>>(
-                resultType);
           case TypeKind::ROW: {
             DCHECK(!exec::isRawInput(step));
             auto sumInputType = inputType->asRow().childAt(0);
+            if (sumInputType->isShortDecimal()) {
+              return std::make_unique<DecimalSumAggregate<int64_t, int128_t>>(
+                  resultType);
+            }
+            if (sumInputType->isLongDecimal()) {
+              return std::make_unique<DecimalSumAggregate<int128_t, int128_t>>(
+                  resultType);
+            }
             switch (sumInputType->kind()) {
-              case TypeKind::SHORT_DECIMAL:
-                return std::make_unique<DecimalSumAggregate<
-                    UnscaledShortDecimal,
-                    UnscaledLongDecimal>>(resultType);
-              case TypeKind::LONG_DECIMAL:
-                return std::make_unique<DecimalSumAggregate<
-                    UnscaledLongDecimal,
-                    UnscaledLongDecimal>>(resultType);
               default:
                 VELOX_FAIL(
                     "Unknown sum type for {} aggregation {}",

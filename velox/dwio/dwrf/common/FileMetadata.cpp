@@ -93,11 +93,7 @@ TypeKind TypeWrapper::kind() const {
     case proto::orc::Type_Kind_DATE:
       return TypeKind::DATE;
     case proto::orc::Type_Kind_DECIMAL: {
-      if (orcPtr()->precision() <= 18) {
-        return TypeKind::SHORT_DECIMAL;
-      } else {
-        return TypeKind::LONG_DECIMAL;
-      }
+      return TypeKind::HUGEINT;
     }
     case proto::orc::Type_Kind_CHAR:
     case proto::orc::Type_Kind_TIMESTAMP_INSTANT:

@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <velox/type/UnscaledShortDecimal.h>
+
 #include "velox/expression/VectorFunction.h"
 #include "velox/functions/Macros.h"
 #include "velox/type/Type.h"
@@ -26,8 +26,8 @@ struct UnscaledValueFunction {
 
   FOLLY_ALWAYS_INLINE void call(
       int64_t& result,
-      const arg_type<UnscaledShortDecimal>& shortDecimal) {
-    result = shortDecimal.unscaledValue();
+      const arg_type<int64_t>& shortDecimal) {
+    result = shortDecimal;
   }
 };
 

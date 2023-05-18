@@ -732,13 +732,12 @@ struct UnsafeRowDeserializer {
       } else {
         vector->setNull(i, false);
 
-        if constexpr (std::is_same_v<InMemoryType, UnscaledShortDecimal>) {
+        if constexpr (std::is_same_v<InMemoryType, int64_t>) {
           int64_t val =
               UnsafeRowPrimitiveBatchDeserializer::deserializeFixedWidth<
                   int64_t>(iterator->next().value());
-          TypeTraits::set(flatResult, i, UnscaledShortDecimal(val));
-        } else if constexpr (std::
-                                 is_same_v<InMemoryType, UnscaledLongDecimal>) {
+          TypeTraits::set(flatResult, i, int64_t(val));
+        } else if constexpr (std::is_same_v<InMemoryType, int128_t>) {
           int64_t offsetAndSize;
           auto memory_address = iterator->next().value().data();
           memcpy(&offsetAndSize, memory_address, sizeof(int64_t));
@@ -760,7 +759,7 @@ struct UnsafeRowDeserializer {
           }
           int128_t val;
           memcpy(&val, bytesValue2, sizeof(int128_t));
-          TypeTraits::set(flatResult, i, UnscaledLongDecimal(val));
+          TypeTraits::set(flatResult, i, val);
         }
       }
     }
@@ -830,11 +829,8 @@ struct UnsafeRowDeserializer {
       int32_t fieldsIdx = 0) {
     const TypePtr& type = dataIterator->type();
     assert(type->isPrimitiveType());
-    if (type->kind() == TypeKind::SHORT_DECIMAL) {
-      return createDecimalFlatVector<TypeKind::SHORT_DECIMAL>(
-          dataIterator, type, pool, numFields, fieldsIdx);
-    } else if (type->kind() == TypeKind::LONG_DECIMAL) {
-      return createDecimalFlatVector<TypeKind::LONG_DECIMAL>(
+    if (type->kind() == TypeKind::HUGEINT) {
+      return createDecimalFlatVector<TypeKind::HUGEINT>(
           dataIterator, type, pool, numFields, fieldsIdx);
     }
     return VELOX_DYNAMIC_SCALAR_TYPE_DISPATCH(

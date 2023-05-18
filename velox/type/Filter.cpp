@@ -91,12 +91,6 @@ std::string Filter::toString() const {
     case FilterKind::kHugeintRange:
       strKind = "HugeintRange";
       break;
-    case FilterKind::kShortDecimalRange:
-      strKind = "ShortDecimalRange";
-      break;
-    case FilterKind::kShortDecimalMultiRange:
-      strKind = "ShortDecimalMultiRange";
-      break;
   };
 
   return fmt::format(
@@ -123,6 +117,7 @@ std::unordered_map<FilterKind, std::string> filterKindNames() {
       {FilterKind::kNegatedBigintValuesUsingBitmask,
        "kNegatedBigintValuesUsingBitmask"},
       {FilterKind::kDoubleRange, "kDoubleRange"},
+      {FilterKind::kDoubleValues, "kDoubleValues"},
       {FilterKind::kFloatRange, "kFloatRange"},
       {FilterKind::kBytesRange, "kBytesRange"},
       {FilterKind::kNegatedBytesRange, "kNegatedBytesRange"},
@@ -833,103 +828,6 @@ bool BigintValuesUsingHashTable::testInt64(int64_t value) const {
   return false;
 }
 
-DoubleValues::DoubleValues(
-    double min,
-    double max,
-    const std::vector<double>& values,
-    bool nullAllowed)
-    : Filter(true, nullAllowed, FilterKind::kDoubleValues),
-      min_(min),
-      max_(max) {
-  VELOX_CHECK(min < max, "min must be less than max");
-  VELOX_CHECK(values.size() > 1, "values must contain at least 2 entries");
-
-  bitmask_.resize(toInt64(max) - toInt64(min) + 1);
-
-  for (double value : values) {
-    bitmask_[toInt64(value) - toInt64(min)] = true;
-  }
-}
-
-bool DoubleValues::testDouble(double value) const {
-  if (value < min_ || value > max_) {
-    return false;
-  }
-  return bitmask_[toInt64(value) - toInt64(min_)];
-}
-
-std::vector<double> DoubleValues::values() const {
-  std::vector<double> values;
-  for (int i = 0; i < bitmask_.size(); i++) {
-    if (bitmask_[i]) {
-      values.push_back(min_ + i);
-    }
-  }
-  return values;
-}
-
-bool DoubleValues::testDoubleRange(double min, double max, bool hasNull) const {
-  if (hasNull && nullAllowed_) {
-    return true;
-  }
-
-  if (toInt64(min) == toInt64(max)) {
-    return testDouble(min);
-  }
-
-  return !(min > max_ || max < min_);
-}
-
-std::unique_ptr<Filter> DoubleValues::mergeWith(const Filter* other) const {
-  switch (other->kind()) {
-    case FilterKind::kAlwaysTrue:
-    case FilterKind::kAlwaysFalse:
-    case FilterKind::kIsNull:
-      return other->mergeWith(this);
-    case FilterKind::kIsNotNull:
-      return std::make_unique<DoubleValues>(*this, false);
-    case FilterKind::kDoubleRange: {
-      auto otherRange = dynamic_cast<const DoubleRange*>(other);
-
-      auto min = std::max(min_, otherRange->lower());
-      auto max = std::min(max_, otherRange->upper());
-
-      return mergeWith(min, max, other);
-    }
-    case FilterKind::kFloatRange: {
-      auto otherRange = dynamic_cast<const FloatRange*>(other);
-
-      auto min = std::max(min_, otherRange->lower());
-      auto max = std::min(max_, otherRange->upper());
-
-      return mergeWith(min, max, other);
-    }
-    case FilterKind::kDoubleValues: {
-      auto otherValues = dynamic_cast<const DoubleValues*>(other);
-
-      auto min = std::max(min_, otherValues->min_);
-      auto max = std::min(max_, otherValues->max_);
-
-      return mergeWith(min, max, other);
-    }
-    default:
-      VELOX_UNREACHABLE();
-  }
-}
-
-std::unique_ptr<Filter>
-DoubleValues::mergeWith(double min, double max, const Filter* other) const {
-  bool bothNullAllowed = nullAllowed_ && other->testNull();
-
-  std::vector<double> valuesToKeep;
-  for (auto i = min; i <= max; ++i) {
-    if (bitmask_[toInt64(i) - toInt64(min_)] && other->testDouble(i)) {
-      valuesToKeep.push_back(i);
-    }
-  }
-  return createDoubleValues(valuesToKeep, bothNullAllowed);
-}
-
 xsimd::batch_bool<int64_t> BigintValuesUsingHashTable::testValues(
     xsimd::batch<int64_t> x) const {
   auto outOfRange = (x < xsimd::broadcast<int64_t>(min_)) |
@@ -1114,6 +1012,7 @@ std::unique_ptr<Filter> notNullOrTrue(bool nullAllowed) {
   }
   return std::make_unique<IsNotNull>();
 }
+
 } // namespace
 
 std::unique_ptr<Filter> createDoubleValues(
@@ -1210,6 +1109,133 @@ std::unique_ptr<Filter> createNegatedBigintValues(
   return createBigintValuesFilter(values, nullAllowed, true);
 }
 
+DoubleValues::DoubleValues(
+    double min,
+    double max,
+    const std::vector<double>& values,
+    bool nullAllowed)
+    : Filter(true, nullAllowed, FilterKind::kDoubleValues),
+      min_(min),
+      max_(max) {
+  VELOX_CHECK(min < max, "min must be less than max");
+  VELOX_CHECK(values.size() > 1, "values must contain at least 2 entries");
+
+  bitmask_.resize(toInt64(max) - toInt64(min) + 1);
+
+  for (double value : values) {
+    bitmask_[toInt64(value) - toInt64(min)] = true;
+  }
+}
+
+bool DoubleValues::testDouble(double value) const {
+  if (value < min_ || value > max_) {
+    return false;
+  }
+  return bitmask_[toInt64(value) - toInt64(min_)];
+}
+
+std::vector<double> DoubleValues::values() const {
+  std::vector<double> values;
+  for (int i = 0; i < bitmask_.size(); i++) {
+    if (bitmask_[i]) {
+      values.push_back(min_ + i);
+    }
+  }
+  return values;
+}
+
+bool DoubleValues::testDoubleRange(double min, double max, bool hasNull) const {
+  if (hasNull && nullAllowed_) {
+    return true;
+  }
+
+  if (toInt64(min) == toInt64(max)) {
+    return testDouble(min);
+  }
+
+  return !(min > max_ || max < min_);
+}
+
+std::unique_ptr<Filter> DoubleValues::mergeWith(const Filter* other) const {
+  switch (other->kind()) {
+    case FilterKind::kAlwaysTrue:
+    case FilterKind::kAlwaysFalse:
+    case FilterKind::kIsNull:
+      return other->mergeWith(this);
+    case FilterKind::kIsNotNull:
+      return std::make_unique<DoubleValues>(*this, false);
+    case FilterKind::kDoubleRange: {
+      auto otherRange = dynamic_cast<const DoubleRange*>(other);
+
+      auto min = std::max(min_, otherRange->lower());
+      auto max = std::min(max_, otherRange->upper());
+
+      return mergeWith(min, max, other);
+    }
+    case FilterKind::kFloatRange: {
+      auto otherRange = dynamic_cast<const FloatRange*>(other);
+
+      auto min = std::max(min_, otherRange->lower());
+      auto max = std::min(max_, otherRange->upper());
+
+      return mergeWith(min, max, other);
+    }
+    case FilterKind::kDoubleValues: {
+      auto otherValues = dynamic_cast<const DoubleValues*>(other);
+
+      auto min = std::max(min_, otherValues->min_);
+      auto max = std::min(max_, otherValues->max_);
+
+      return mergeWith(min, max, other);
+    }
+    default:
+      VELOX_UNREACHABLE();
+  }
+}
+
+std::unique_ptr<Filter>
+DoubleValues::mergeWith(double min, double max, const Filter* other) const {
+  bool bothNullAllowed = nullAllowed_ && other->testNull();
+
+  std::vector<double> valuesToKeep;
+  for (auto i = min; i <= max; ++i) {
+    if (bitmask_[toInt64(i) - toInt64(min_)] && other->testDouble(i)) {
+      valuesToKeep.push_back(i);
+    }
+  }
+  return createDoubleValues(valuesToKeep, bothNullAllowed);
+}
+
+folly::dynamic DoubleValues::serialize() const {
+  auto obj = Filter::serializeBase("DoubleValues");
+  obj["min"] = min_;
+  obj["max"] = max_;
+  folly::dynamic bitmask = folly::dynamic::array;
+  for (auto v : bitmask_) {
+    bitmask.push_back(v);
+  }
+  obj["bitmask"] = bitmask;
+  return obj;
+}
+
+bool DoubleValues::testingEquals(const Filter& other) const {
+  auto otherDoubleValues = dynamic_cast<const DoubleValues*>(&other);
+  bool res = otherDoubleValues != nullptr && Filter::testingBaseEquals(other) &&
+      min_ == otherDoubleValues->min_ && max_ == otherDoubleValues->max_ &&
+      bitmask_.size() == otherDoubleValues->bitmask_.size();
+  if (!res) {
+    return false;
+  }
+  // values_ can be compared pair-wise since they are sorted.
+  for (size_t i = 0; i < bitmask_.size(); ++i) {
+    if (bitmask_.at(i) != otherDoubleValues->bitmask_.at(i)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 BigintMultiRange::BigintMultiRange(
     std::vector<std::unique_ptr<BigintRange>> ranges,
     bool nullAllowed)
@@ -1224,23 +1250,6 @@ BigintMultiRange::BigintMultiRange(
     VELOX_CHECK(
         lowerBounds_[i] >= ranges_[i - 1]->upper(),
         "bigint ranges must not overlap");
-  }
-}
-
-ShortDecimalMultiRange::ShortDecimalMultiRange(
-    std::vector<std::unique_ptr<ShortDecimalRange>> ranges,
-    bool nullAllowed)
-    : Filter(true, nullAllowed, FilterKind::kShortDecimalMultiRange),
-      ranges_(std::move(ranges)) {
-  VELOX_CHECK(!ranges_.empty(), "ranges is empty");
-  VELOX_CHECK(ranges_.size() > 1, "should contain at least 2 ranges");
-  for (const auto& range : ranges_) {
-    lowerBounds_.push_back(range->lower().unscaledValue());
-  }
-  for (int i = 1; i < lowerBounds_.size(); i++) {
-    VELOX_CHECK(
-        lowerBounds_[i] >= ranges_[i - 1]->upper().unscaledValue(),
-        "ShortDecimal ranges must not overlap");
   }
 }
 
@@ -1468,54 +1477,6 @@ bool BigintMultiRange::testInt64(int64_t value) const {
 
 bool BigintMultiRange::testInt64Range(int64_t min, int64_t max, bool hasNull)
     const {
-  if (hasNull && nullAllowed_) {
-    return true;
-  }
-
-  for (const auto& range : ranges_) {
-    if (range->testInt64Range(min, max, hasNull)) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-std::unique_ptr<Filter> ShortDecimalMultiRange::clone(
-    std::optional<bool> nullAllowed) const {
-  std::vector<std::unique_ptr<ShortDecimalRange>> ranges;
-  ranges.reserve(ranges_.size());
-  for (auto& range : ranges_) {
-    ranges.emplace_back(std::make_unique<ShortDecimalRange>(*range));
-  }
-  if (nullAllowed) {
-    return std::make_unique<ShortDecimalMultiRange>(
-        std::move(ranges), nullAllowed.value());
-  } else {
-    return std::make_unique<ShortDecimalMultiRange>(
-        std::move(ranges), nullAllowed_);
-  }
-}
-
-bool ShortDecimalMultiRange::testInt64(int64_t value) const {
-  int32_t i = binarySearch(lowerBounds_, value);
-  if (i >= 0) {
-    return true;
-  }
-  int place = (-i) - 1;
-  if (place == 0) {
-    // Below first
-    return false;
-  }
-  // When value did not hit a lower bound of a filter, test with the filter
-  // before the place where value would be inserted.
-  return ranges_[place - 1]->testInt64(value);
-}
-
-bool ShortDecimalMultiRange::testInt64Range(
-    int64_t min,
-    int64_t max,
-    bool hasNull) const {
   if (hasNull && nullAllowed_) {
     return true;
   }
@@ -1778,12 +1739,6 @@ std::unique_ptr<BigintRange> toBigintRange(std::unique_ptr<Filter> filter) {
       dynamic_cast<BigintRange*>(filter.release()));
 }
 
-std::unique_ptr<ShortDecimalRange> toShortDecimalRange(
-    std::unique_ptr<Filter> filter) {
-  return std::unique_ptr<ShortDecimalRange>(
-      dynamic_cast<ShortDecimalRange*>(filter.release()));
-}
-
 // takes a sorted vector of ranges and a sorted vector of rejected values, and
 // returns a range filter of values accepted by both filters
 std::unique_ptr<Filter> combineRangesAndNegatedValues(
@@ -1972,91 +1927,6 @@ std::unique_ptr<Filter> BigintRange::mergeWith(const Filter* other) const {
       rangeList.emplace_back(
           std::make_unique<common::BigintRange>(lower_, upper_, false));
       return combineRangesAndNegatedValues(rangeList, vals, bothNullAllowed);
-    }
-    default:
-      VELOX_UNREACHABLE();
-  }
-}
-
-std::unique_ptr<Filter> ShortDecimalRange::mergeWith(
-    const Filter* other) const {
-  switch (other->kind()) {
-    case FilterKind::kAlwaysTrue:
-    case FilterKind::kAlwaysFalse:
-    case FilterKind::kIsNull:
-      return other->mergeWith(this);
-    case FilterKind::kIsNotNull:
-      return this->clone(false);
-    case FilterKind::kShortDecimalRange: {
-      bool bothNullAllowed = nullAllowed_ && other->testNull();
-
-      auto otherRange = static_cast<const ShortDecimalRange*>(other);
-
-      auto lower = std::max(lower_, otherRange->lower_);
-      auto upper = std::min(upper_, otherRange->upper_);
-
-      if (lower <= upper) {
-        return std::make_unique<ShortDecimalRange>(
-            lower, upper, bothNullAllowed);
-      }
-
-      return nullOrFalse(bothNullAllowed);
-    }
-
-    default:
-      VELOX_UNREACHABLE();
-  }
-}
-
-std::unique_ptr<Filter> ShortDecimalMultiRange::mergeWith(
-    const Filter* other) const {
-  switch (other->kind()) {
-    case FilterKind::kAlwaysTrue:
-    case FilterKind::kAlwaysFalse:
-    case FilterKind::kIsNull:
-      return other->mergeWith(this);
-    case FilterKind::kIsNotNull: {
-      std::vector<std::unique_ptr<ShortDecimalRange>> ranges;
-      ranges.reserve(ranges_.size());
-      for (auto& range : ranges_) {
-        ranges.push_back(std::make_unique<ShortDecimalRange>(*range));
-      }
-      return std::make_unique<ShortDecimalMultiRange>(std::move(ranges), false);
-    }
-    case FilterKind::kShortDecimalRange:
-      return other->mergeWith(this);
-
-    case FilterKind::kShortDecimalMultiRange: {
-      std::vector<std::unique_ptr<ShortDecimalRange>> newRanges;
-      for (const auto& range : ranges_) {
-        auto merged = range->mergeWith(other);
-        if (merged->kind() == FilterKind::kShortDecimalRange) {
-          newRanges.push_back(toShortDecimalRange(std::move(merged)));
-        } else if (merged->kind() == FilterKind::kBigintMultiRange) {
-          auto mergedMultiRange =
-              dynamic_cast<ShortDecimalMultiRange*>(merged.get());
-          for (const auto& newRange : mergedMultiRange->ranges_) {
-            newRanges.push_back(toShortDecimalRange(newRange->clone()));
-          }
-        } else {
-          VELOX_CHECK(merged->kind() == FilterKind::kAlwaysFalse);
-        }
-      }
-
-      bool bothNullAllowed = nullAllowed_ && other->testNull();
-      if (newRanges.empty()) {
-        return nullOrFalse(bothNullAllowed);
-      }
-
-      if (newRanges.size() == 1) {
-        return std::make_unique<ShortDecimalRange>(
-            newRanges.front()->lower(),
-            newRanges.front()->upper(),
-            bothNullAllowed);
-      }
-
-      return std::make_unique<ShortDecimalMultiRange>(
-          std::move(newRanges), bothNullAllowed);
     }
     default:
       VELOX_UNREACHABLE();

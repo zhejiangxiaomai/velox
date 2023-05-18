@@ -181,7 +181,7 @@ int128_t readInt128(ByteStream* source) {
   // ByteStream does not support reading int128_t values.
   auto low = source->read<int64_t>();
   auto high = source->read<int64_t>();
-  return buildInt128(high, low);
+  return HugeInt::build(high, low);
 }
 
 template <typename T>
@@ -233,11 +233,11 @@ VectorPtr readConstantVector(
     return BaseVector::createNullConstant(type, length, pool);
   }
 
-  if constexpr (std::is_same_v<T, UnscaledShortDecimal>) {
+  if constexpr (std::is_same_v<T, int64_t>) {
     int64_t unscaledValue = source->read<int64_t>();
     return std::make_shared<ConstantVector<T>>(
         pool, length, false, type, T(unscaledValue));
-  } else if constexpr (std::is_same_v<T, UnscaledLongDecimal>) {
+  } else if constexpr (std::is_same_v<T, int128_t>) {
     return std::make_shared<ConstantVector<T>>(
         pool, length, false, type, T(readInt128(source)));
   } else {
@@ -539,12 +539,12 @@ void serializeConstantVector(
   }
 
   if (!vector->isNullAt(0)) {
-    if constexpr (std::is_same_v<T, UnscaledShortDecimal>) {
+    if constexpr (std::is_same_v<T, int64_t>) {
       T value = constVector->valueAtFast(0);
-      stream->appendOneConst<int64_t>(value.unscaledValue());
-    } else if constexpr (std::is_same_v<T, UnscaledLongDecimal>) {
+      stream->appendOneConst<int64_t>(value);
+    } else if constexpr (std::is_same_v<T, int128_t>) {
       T value = constVector->valueAtFast(0);
-      stream->appendOneConst<int128_t>(value.unscaledValue());
+      stream->appendOneConst<int128_t>(value);
     } else {
       VELOX_DYNAMIC_SCALAR_TYPE_DISPATCH(
           serializeVariable, vector->typeKind(), vector, stream);

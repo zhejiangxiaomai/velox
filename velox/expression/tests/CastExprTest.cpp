@@ -45,9 +45,9 @@ class CastExprTest : public functions::test::CastBaseTest {
   }
 
   void setCastIntAllowDecimalAndByTruncate(bool value) {
-    queryCtx_->setConfigOverridesUnsafe(
+    queryCtx_->testingOverrideConfigUnsafe(
         {{core::QueryConfig::kCastIntAllowDecimal, std::to_string(value)},
-         {core::QueryConfig::kCastIntByTruncate, std::to_string(value)}});
+         {core::QueryConfig::kCastToIntByTruncate, std::to_string(value)}});
   }
 
   void setCastMatchStructByName(bool value) {

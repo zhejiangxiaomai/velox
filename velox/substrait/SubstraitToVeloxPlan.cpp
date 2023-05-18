@@ -1697,6 +1697,18 @@ void SubstraitVeloxPlanConverter::setFilterMap(
   uint32_t colIdxVal = colIdx.value();
   auto inputType = inputTypeList[colIdxVal];
   std::optional<variant> val;
+  if (inputType->isShortDecimal()) {
+    if (substraitLit) {
+      auto decimal = substraitLit.value().decimal().value();
+      auto precision = substraitLit.value().decimal().precision();
+      auto scale = substraitLit.value().decimal().scale();
+      int128_t decimalValue;
+      memcpy(&decimalValue, decimal.c_str(), 16);
+      auto type = DECIMAL(precision, scale);
+      val = variant(static_cast<int64_t>(decimalValue));
+    }
+    setColInfoMap<int64_t>(functionName, colIdxVal, val, reverse, colInfoMap);
+  }
   switch (inputType->kind()) {
     case TypeKind::INTEGER:
       if (substraitLit) {
@@ -1735,19 +1747,6 @@ void SubstraitVeloxPlanConverter::setFilterMap(
       }
       setColInfoMap<int>(functionName, colIdxVal, val, reverse, colInfoMap);
       break;
-    case TypeKind::SHORT_DECIMAL:
-      if (substraitLit) {
-        auto decimal = substraitLit.value().decimal().value();
-        auto precision = substraitLit.value().decimal().precision();
-        auto scale = substraitLit.value().decimal().scale();
-        int128_t decimalValue;
-        memcpy(&decimalValue, decimal.c_str(), 16);
-        auto type = SHORT_DECIMAL(precision, scale);
-        val = variant::shortDecimal((int64_t)decimalValue, type);
-      }
-      setColInfoMap<UnscaledShortDecimal>(
-          functionName, colIdxVal, val, reverse, colInfoMap);
-      break;
     default:
       VELOX_NYI(
           "Subfield filters creation not supported for input type '{}'",
@@ -1762,52 +1761,27 @@ void SubstraitVeloxPlanConverter::createNotEqualFilter(
     std::vector<std::unique_ptr<FilterType>>& colFilters) {
   using NativeType = typename RangeTraits<KIND>::NativeType;
   using RangeType = typename RangeTraits<KIND>::RangeType;
+  // Value > lower
+  std::unique_ptr<FilterType> lowerFilter = std::make_unique<RangeType>(
+      notVariant.value<NativeType>(), /*lower*/
+      false, /*lowerUnbounded*/
+      true, /*lowerExclusive*/
+      getMax<NativeType>(), /*upper*/
+      true, /*upperUnbounded*/
+      false, /*upperExclusive*/
+      nullAllowed); /*nullAllowed*/
+  colFilters.emplace_back(std::move(lowerFilter));
 
-  if constexpr (KIND == facebook::velox::TypeKind::SHORT_DECIMAL) {
-    // Value > lower
-    std::unique_ptr<FilterType> lowerFilter = std::make_unique<RangeType>(
-        UnscaledShortDecimal(notVariant.value<NativeType>().value()), /*lower*/
-        false, /*lowerUnbounded*/
-        true, /*lowerExclusive*/
-        UnscaledShortDecimal::max(), /*upper*/
-        true, /*upperUnbounded*/
-        false, /*upperExclusive*/
-        nullAllowed); /*nullAllowed*/
-    colFilters.emplace_back(std::move(lowerFilter));
-
-    // Value < upper
-    std::unique_ptr<FilterType> upperFilter = std::make_unique<RangeType>(
-        UnscaledShortDecimal::min(), /*lower*/
-        true, /*lowerUnbounded*/
-        false, /*lowerExclusive*/
-        UnscaledShortDecimal(notVariant.value<NativeType>().value()), /*upper*/
-        false, /*upperUnbounded*/
-        true, /*upperExclusive*/
-        nullAllowed); /*nullAllowed*/
-    colFilters.emplace_back(std::move(upperFilter));
-  } else {
-    // Value > lower
-    std::unique_ptr<FilterType> lowerFilter = std::make_unique<RangeType>(
-        notVariant.value<NativeType>(), /*lower*/
-        false, /*lowerUnbounded*/
-        true, /*lowerExclusive*/
-        getMax<NativeType>(), /*upper*/
-        true, /*upperUnbounded*/
-        false, /*upperExclusive*/
-        nullAllowed); /*nullAllowed*/
-    colFilters.emplace_back(std::move(lowerFilter));
-
-    // Value < upper
-    std::unique_ptr<FilterType> upperFilter = std::make_unique<RangeType>(
-        getLowest<NativeType>(), /*lower*/
-        true, /*lowerUnbounded*/
-        false, /*lowerExclusive*/
-        notVariant.value<NativeType>(), /*upper*/
-        false, /*upperUnbounded*/
-        true, /*upperExclusive*/
-        nullAllowed); /*nullAllowed*/
-    colFilters.emplace_back(std::move(upperFilter));
-  }
+  // Value < upper
+  std::unique_ptr<FilterType> upperFilter = std::make_unique<RangeType>(
+      getLowest<NativeType>(), /*lower*/
+      true, /*lowerUnbounded*/
+      false, /*lowerExclusive*/
+      notVariant.value<NativeType>(), /*upper*/
+      false, /*upperUnbounded*/
+      true, /*upperExclusive*/
+      nullAllowed); /*nullAllowed*/
+  colFilters.emplace_back(std::move(upperFilter));
 }
 
 template <TypeKind KIND>
@@ -2026,15 +2000,15 @@ void SubstraitVeloxPlanConverter::constructSubfieldFilters(
 
   // Handle other filter ranges.
   NativeType lowerBound;
-  if constexpr (KIND == facebook::velox::TypeKind::SHORT_DECIMAL) {
-    lowerBound = UnscaledShortDecimal::min();
+  if constexpr (KIND == facebook::velox::TypeKind::BIGINT) {
+    lowerBound = DecimalUtil::kShortDecimalMin;
   } else {
     lowerBound = getLowest<NativeType>();
   }
 
   NativeType upperBound;
-  if constexpr (KIND == facebook::velox::TypeKind::SHORT_DECIMAL) {
-    upperBound = UnscaledShortDecimal::max();
+  if constexpr (KIND == facebook::velox::TypeKind::BIGINT) {
+    upperBound = DecimalUtil::kShortDecimalMax;
   } else {
     upperBound = getMax<NativeType>();
   }
@@ -2049,12 +2023,8 @@ void SubstraitVeloxPlanConverter::constructSubfieldFilters(
         filterInfo->lowerBounds_[idx]) {
       lowerUnbounded = false;
       variant lowerVariant = filterInfo->lowerBounds_[idx].value();
-      if constexpr (KIND == facebook::velox::TypeKind::SHORT_DECIMAL) {
-        lowerBound = UnscaledShortDecimal(
-            lowerVariant.value<TypeKind::SHORT_DECIMAL>().value());
-      } else {
-        lowerBound = lowerVariant.value<NativeType>();
-      }
+
+      lowerBound = lowerVariant.value<NativeType>();
 
       lowerExclusive = filterInfo->lowerExclusives_[idx];
     }
@@ -2062,12 +2032,7 @@ void SubstraitVeloxPlanConverter::constructSubfieldFilters(
         filterInfo->upperBounds_[idx]) {
       upperUnbounded = false;
       variant upperVariant = filterInfo->upperBounds_[idx].value();
-      if constexpr (KIND == facebook::velox::TypeKind::SHORT_DECIMAL) {
-        upperBound = UnscaledShortDecimal(
-            upperVariant.value<TypeKind::SHORT_DECIMAL>().value());
-      } else {
-        upperBound = upperVariant.value<NativeType>();
-      }
+      upperBound = upperVariant.value<NativeType>();
 
       upperExclusive = filterInfo->upperExclusives_[idx];
     }
@@ -2143,13 +2108,6 @@ connector::hive::SubfieldFilters SubstraitVeloxPlanConverter::mapToFilters(
         constructSubfieldFilters<TypeKind::DATE, common::BigintRange>(
             colIdx, inputNameList[colIdx], colInfoMap[colIdx], filters);
         break;
-      case TypeKind::SHORT_DECIMAL:
-        constructSubfieldFilters<
-            TypeKind::SHORT_DECIMAL,
-            common::ShortDecimalRange>(
-            colIdx, inputNameList[colIdx], colInfoMap[colIdx], filters);
-        break;
-
       default:
         VELOX_NYI(
             "Subfield filters creation not supported for input type '{}'",

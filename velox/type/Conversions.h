@@ -24,8 +24,6 @@
 #include "velox/type/DecimalUtil.h"
 #include "velox/type/TimestampConversion.h"
 #include "velox/type/Type.h"
-#include "velox/type/UnscaledLongDecimal.h"
-#include "velox/type/UnscaledShortDecimal.h"
 
 namespace facebook::velox::util {
 
@@ -88,14 +86,6 @@ struct Converter<TypeKind::BOOLEAN> {
   static T cast(const Timestamp& d, bool& nullOutput) {
     VELOX_UNSUPPORTED("Conversion of Timestamp to Boolean is not supported");
   }
-
-  static T cast(const UnscaledLongDecimal& d, bool& nullOutput) {
-    return folly::to<T>(d.unscaledValue());
-  }
-
-  static T cast(const UnscaledShortDecimal& d, bool& nullOutput) {
-    return folly::to<T>(d.unscaledValue());
-  }
 };
 
 template <TypeKind KIND, bool TRUNCATE, bool ALLOW_DECIMAL>
@@ -113,40 +103,6 @@ struct Converter<
   template <typename From>
   static T cast(const From& v, bool& nullOutput, const TypePtr& toType) {
     VELOX_NYI();
-  }
-
-  static T cast(
-      const UnscaledLongDecimal& d,
-      bool& nullOutput,
-      const TypePtr& fromType) {
-    const auto& decimalType = fromType->asLongDecimal();
-    auto scale0Decimal = DecimalUtil::
-        rescaleWithRoundUp<UnscaledLongDecimal, UnscaledLongDecimal>(
-            d,
-            decimalType.precision(),
-            decimalType.scale(),
-            decimalType.precision(),
-            0,
-            false,
-            false);
-    return cast(scale0Decimal.value().unscaledValue(), nullOutput);
-  }
-
-  static T cast(
-      const UnscaledShortDecimal& d,
-      bool& nullOutput,
-      const TypePtr& fromType) {
-    const auto& decimalType = fromType->asShortDecimal();
-    auto scale0Decimal = DecimalUtil::
-        rescaleWithRoundUp<UnscaledShortDecimal, UnscaledShortDecimal>(
-            d,
-            decimalType.precision(),
-            decimalType.scale(),
-            decimalType.precision(),
-            0,
-            false,
-            false);
-    return cast(scale0Decimal.value().unscaledValue(), nullOutput);
   }
 
   template <typename From>
@@ -387,20 +343,14 @@ struct Converter<
     VELOX_NYI();
   }
 
-  static T cast(
-      const UnscaledShortDecimal& v,
-      bool& nullOutput,
-      const TypePtr& fromType) {
+  static T cast(const int64_t& v, bool& nullOutput, const TypePtr& fromType) {
     auto decimalType = fromType->asShortDecimal();
-    return DecimalUtil::toDoubleValue(v.unscaledValue(), decimalType.scale());
+    return DecimalUtil::toDoubleValue(v, decimalType.scale());
   }
 
-  static T cast(
-      const UnscaledLongDecimal& v,
-      bool& nullOutput,
-      const TypePtr& fromType) {
+  static T cast(const int128_t& v, bool& nullOutput, const TypePtr& fromType) {
     auto decimalType = fromType->asLongDecimal();
-    return DecimalUtil::toDoubleValue(v.unscaledValue(), decimalType.scale());
+    return DecimalUtil::toDoubleValue(v, decimalType.scale());
   }
 
   template <typename From>
@@ -469,14 +419,9 @@ struct Converter<
         "Conversion of Timestamp to Real or Double is not supported");
   }
 
-  static T cast(const UnscaledLongDecimal& d, bool& nullOutput) {
+  static T cast(const int128_t& d, bool& nullOutput) {
     VELOX_UNSUPPORTED(
-        "Conversion of UnscaledLongDecimal to Real or Double is not supported");
-  }
-
-  static T cast(const UnscaledShortDecimal& d, bool& nullOutput) {
-    VELOX_UNSUPPORTED(
-        "Conversion of UnscaledShortDecimal to Real or Double is not supported");
+        "Conversion of int128_t to Real or Double is not supported");
   }
 };
 
@@ -488,28 +433,14 @@ struct Converter<TypeKind::VARCHAR, void, TRUNCATE, ALLOW_DECIMAL> {
     VELOX_NYI();
   }
 
-  static std::string cast(
-      const UnscaledShortDecimal& v,
-      bool& nullOutput,
-      const TypePtr& fromType) {
-    return DecimalUtil::toString<UnscaledShortDecimal>(v, fromType);
+  static std::string
+  cast(const int64_t& v, bool& nullOutput, const TypePtr& fromType) {
+    return DecimalUtil::toString(v, fromType);
   }
 
-  static std::string cast(
-      const UnscaledLongDecimal& v,
-      bool& nullOutput,
-      const TypePtr& fromType) {
-    return DecimalUtil::toString<UnscaledLongDecimal>(v, fromType);
-  }
-
-  static std::string cast(const UnscaledLongDecimal& d, bool& nullOutput) {
-    VELOX_UNSUPPORTED(
-        "Conversion of UnscaledLongDecimal to varchar is not supported");
-  }
-
-  static std::string cast(const UnscaledShortDecimal& d, bool& nullOutput) {
-    VELOX_UNSUPPORTED(
-        "Conversion of UnscaledShortDecimal to varchar is not supported");
+  static std::string
+  cast(const int128_t& v, bool& nullOutput, const TypePtr& fromType) {
+    return DecimalUtil::toString(v, fromType);
   }
 
   template <typename T>
@@ -567,16 +498,6 @@ struct Converter<TypeKind::TIMESTAMP> {
     static const int64_t kMillisPerDay{86'400'000};
     return Timestamp::fromMillis(d.days() * kMillisPerDay);
   }
-
-  static T cast(const UnscaledLongDecimal& d, bool& nullOutput) {
-    VELOX_UNSUPPORTED(
-        "Conversion of UnscaledLongDecimal to Date is not supported");
-  }
-
-  static T cast(const UnscaledShortDecimal& d, bool& nullOutput) {
-    VELOX_UNSUPPORTED(
-        "Conversion of UnscaledShortDecimal to Date is not supported");
-  }
 };
 
 // Allow conversions from string to DATE type.
@@ -617,16 +538,6 @@ struct Converter<TypeKind::DATE, void, TRUNCATE, ALLOW_DECIMAL> {
     // fractional part. e.g. -1/86'400 yields 0, yet it should be considered as
     // -1 day.
     return Date(seconds / kSecsPerDay - 1);
-  }
-
-  static T cast(const UnscaledLongDecimal& d, bool& nullOutput) {
-    VELOX_UNSUPPORTED(
-        "Conversion of UnscaledLongDecimal to Timestamp is not supported");
-  }
-
-  static T cast(const UnscaledShortDecimal& d, bool& nullOutput) {
-    VELOX_UNSUPPORTED(
-        "Conversion of UnscaledShortDecimal to Timestamp is not supported");
   }
 };
 

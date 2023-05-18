@@ -66,6 +66,14 @@ std::unique_ptr<SelectiveColumnReader> SelectiveDwrfReader::build(
       *dataType->type, *requestedType->type);
   EncodingKey ek{dataType->id, params.flatMapContext().sequence};
   auto& stripe = params.stripeStreams();
+  if (dataType->type->isShortDecimal()) {
+    return std::make_unique<SelectiveShortDecimalColumnReader>(
+        requestedType, dataType->type, params, scanSpec);
+  }
+  if (dataType->type->isLongDecimal()) {
+    return std::make_unique<SelectiveLongDecimalColumnReader>(
+        requestedType, dataType->type, params, scanSpec);
+  }
   switch (dataType->type->kind()) {
     case TypeKind::INTEGER:
     case TypeKind::DATE:
@@ -128,12 +136,6 @@ std::unique_ptr<SelectiveColumnReader> SelectiveDwrfReader::build(
     case TypeKind::TIMESTAMP:
       return std::make_unique<SelectiveTimestampColumnReader>(
           requestedType, params, scanSpec);
-    case TypeKind::SHORT_DECIMAL:
-      return std::make_unique<SelectiveShortDecimalColumnReader>(
-          requestedType, dataType->type, params, scanSpec);
-    case TypeKind::LONG_DECIMAL:
-      return std::make_unique<SelectiveLongDecimalColumnReader>(
-          requestedType, dataType->type, params, scanSpec);
     default:
       DWIO_RAISE(
           "buildReader unhandled type: " +
