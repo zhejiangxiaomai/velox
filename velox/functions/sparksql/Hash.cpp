@@ -71,8 +71,8 @@ void applyWithType(
       CASE(REAL, hash.hashFloat, float);
       CASE(DOUBLE, hash.hashDouble, double);
       CASE(DATE, hash.hashDate, int32_t);
-      CASE(HUGEINT, hash.hashInt128, int128_t)
-
+      CASE(HUGEINT, hash.hashInt128, int128_t);
+      CASE(TIMESTAMP, hash.hashTimestamp, Timestamp);
 #undef CASE
       default:
         VELOX_NYI(
@@ -148,6 +148,10 @@ class Murmur3Hash final {
     auto value = hashBytes(StringView(data, 16), seed);
     delete data;
     return value;
+  }
+
+  uint32_t hashTimestamp(Timestamp input, uint32_t seed) {
+    return hashInt64(input.toMicros(), seed);
   }
 
  private:
@@ -259,6 +263,10 @@ class XxHash64 final {
     auto value = hashBytes(StringView(data, 16), seed);
     delete data;
     return value;
+  }
+
+  uint32_t hashTimestamp(Timestamp input, uint32_t seed) {
+    return hashInt64(input.toMicros(), seed);
   }
 
  private:
