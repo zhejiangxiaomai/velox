@@ -374,6 +374,10 @@ void CastExpr::applyCast(
       return applyCastWithTry<To, Timestamp>(
           rows, context, input, resultFlatVector);
     }
+    case TypeKind::HUGEINT: {
+      return applyCastWithTry<To, int128_t>(
+          rows, context, input, resultFlatVector);
+    }
 
     default: {
       VELOX_UNSUPPORTED("Invalid from type in casting: {}", fromType);

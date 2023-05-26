@@ -105,6 +105,34 @@ struct Converter<
     VELOX_NYI();
   }
 
+  // from long decimal cast to some type
+  static T cast(const int128_t& d, bool& nullOutput, const TypePtr& fromType) {
+    const auto& decimalType = fromType->asLongDecimal();
+    auto scale0Decimal = DecimalUtil::rescaleWithRoundUp<int128_t, int128_t>(
+        d,
+        decimalType.precision(),
+        decimalType.scale(),
+        decimalType.precision(),
+        0,
+        false,
+        false);
+    return cast(scale0Decimal.value(), nullOutput);
+  }
+
+  // from short decimal cast to some type
+  static T cast(const int64_t& d, bool& nullOutput, const TypePtr& fromType) {
+    const auto& decimalType = fromType->asShortDecimal();
+    auto scale0Decimal = DecimalUtil::rescaleWithRoundUp<int64_t, int64_t>(
+        d,
+        decimalType.precision(),
+        decimalType.scale(),
+        decimalType.precision(),
+        0,
+        false,
+        false);
+    return cast(scale0Decimal.value(), nullOutput);
+  }
+
   template <typename From>
   static T cast(const From& v, bool& nullOutput) {
     VELOX_UNSUPPORTED(
