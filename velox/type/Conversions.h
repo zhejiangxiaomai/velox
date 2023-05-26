@@ -257,7 +257,9 @@ struct Converter<
       if (v > LimitType::maxLimit()) {
         return LimitType::max();
       }
-      if (v < LimitType::minLimit()) {
+      // bool type's min is 0, but spark expects true for casting negative float
+      // data.
+      if (!std::is_same_v<T, bool> && v < LimitType::minLimit()) {
         return LimitType::min();
       }
       return LimitType::cast(v);
@@ -277,7 +279,9 @@ struct Converter<
       if (v > LimitType::maxLimit()) {
         return LimitType::max();
       }
-      if (v < LimitType::minLimit()) {
+      // bool type's min is 0, but spark expects true for casting negative float
+      // data.
+      if (!std::is_same_v<T, bool> && v < LimitType::minLimit()) {
         return LimitType::min();
       }
       return LimitType::cast(v);
@@ -517,15 +521,30 @@ struct Converter<TypeKind::DATE, void, TRUNCATE, ALLOW_DECIMAL> {
   }
 
   static T cast(folly::StringPiece v, bool& nullOutput) {
-    return fromDateString(v.data(), v.size());
+    try {
+      return fromDateString(v.data(), v.size());
+    } catch (const VeloxUserError& ve) {
+      nullOutput = true;
+      return (T)0;
+    }
   }
 
   static T cast(const StringView& v, bool& nullOutput) {
-    return fromDateString(v.data(), v.size());
+    try {
+      return fromDateString(v.data(), v.size());
+    } catch (const VeloxUserError& ve) {
+      nullOutput = true;
+      return (T)0;
+    }
   }
 
   static T cast(const std::string& v, bool& nullOutput) {
-    return fromDateString(v.data(), v.size());
+    try {
+      return fromDateString(v.data(), v.size());
+    } catch (const VeloxUserError& ve) {
+      nullOutput = true;
+      return (T)0;
+    }
   }
 
   static T cast(const Timestamp& t, bool& nullOutput) {
