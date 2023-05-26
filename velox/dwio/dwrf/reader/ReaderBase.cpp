@@ -284,6 +284,7 @@ std::shared_ptr<const Type> ReaderBase::convertType(
     case TypeKind::TINYINT:
     case TypeKind::SMALLINT:
     case TypeKind::INTEGER:
+    case TypeKind::BIGINT:
     case TypeKind::REAL:
     case TypeKind::DOUBLE:
     case TypeKind::VARCHAR:
