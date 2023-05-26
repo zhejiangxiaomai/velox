@@ -52,9 +52,7 @@ void applyCastKernel(
   // Special handling for string target type
   if constexpr (CppToType<To>::typeKind == TypeKind::VARCHAR) {
     std::string output;
-    if constexpr (
-        CppToType<From>::typeKind == TypeKind::BIGINT ||
-        CppToType<From>::typeKind == TypeKind::HUGEINT) {
+    if (input->type()->isDecimal()) {
       output = util::
           Converter<CppToType<To>::typeKind, void, Truncate, AllowDecimal>::
               cast(input->valueAt(row), nullOutput, input->type());
@@ -75,9 +73,7 @@ void applyCastKernel(
       writer.finalize();
     }
   } else {
-    if constexpr (
-        CppToType<From>::typeKind == TypeKind::BIGINT ||
-        CppToType<From>::typeKind == TypeKind::HUGEINT) {
+    if (input->type()->isDecimal()) {
       auto output = util::
           Converter<CppToType<To>::typeKind, void, Truncate, AllowDecimal>::
               cast(input->valueAt(row), nullOutput, input->type());
