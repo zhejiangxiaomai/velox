@@ -16,6 +16,9 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH}
                       "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/")
 
 include(ExternalProject)
+if(NOT DEFINED CMAKE_INSTALL_LIBDIR)
+  set(CMAKE_INSTALL_LIBDIR "lib")
+endif()
 
 if(VELOX_ENABLE_ARROW)
   find_package(Thrift)
@@ -69,7 +72,7 @@ if(VELOX_ENABLE_ARROW)
       -DARROW_BUILD_STATIC=ON
       -DThrift_SOURCE=BUNDLED
       -Dre2_SOURCE=AUTO)
-  set(ARROW_LIBDIR ${ARROW_PREFIX}/install/lib/${CMAKE_INSTALL_LIBDIR})
+  set(ARROW_LIBDIR ${ARROW_PREFIX}/install/${CMAKE_INSTALL_LIBDIR})
 
   add_library(thrift STATIC IMPORTED GLOBAL)
   if(NOT Thrift_FOUND)
