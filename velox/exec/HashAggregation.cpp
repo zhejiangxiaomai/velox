@@ -37,9 +37,6 @@ HashAggregation::HashAggregation(
               ? driverCtx->makeSpillConfig(operatorId)
               : std::nullopt),
       isPartialOutput_(isPartialOutput(aggregationNode->step())),
-      isIntermediate_(
-          aggregationNode->step() ==
-          core::AggregationNode::Step::kIntermediate),
       isDistinct_(aggregationNode->aggregates().empty()),
       isGlobal_(aggregationNode->groupingKeys().empty()),
       maxExtendedPartialAggregationMemoryUsage_(
@@ -181,7 +178,6 @@ void HashAggregation::addInput(RowVectorPtr input) {
   }
   groupingSet_->addInput(input, mayPushdown_);
   numInputRows_ += input->size();
-  numInputVectors_ += 1;
   {
     const auto hashTableStats = groupingSet_->hashTableStats();
     auto lockedStats = stats_.wlock();
