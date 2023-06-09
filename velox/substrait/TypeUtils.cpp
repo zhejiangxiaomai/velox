@@ -94,7 +94,12 @@ TypePtr toVeloxType(const std::string& typeName) {
     case TypeKind::INTEGER:
       return INTEGER();
     case TypeKind::BIGINT:
-      return BIGINT();
+      if (type == "SHORT_DECIMAL") {
+        auto decimal = getPrecisionAndScale(typeName);
+        return DECIMAL(decimal.first, decimal.second);
+      } else {
+        return BIGINT();
+      }
     case TypeKind::HUGEINT: {
       auto decimal = getPrecisionAndScale(typeName);
       return DECIMAL(decimal.first, decimal.second);
