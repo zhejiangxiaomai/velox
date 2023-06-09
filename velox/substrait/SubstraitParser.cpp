@@ -131,10 +131,13 @@ std::shared_ptr<SubstraitParser::SubstraitType> SubstraitParser::parseType(
     }
     case ::substrait::Type::KindCase::kDecimal: {
       auto precision = substraitType.decimal().precision();
+      auto scale = substraitType.decimal().scale();
       if (precision <= 18) {
-        typeName = "BIGINT";
+        typeName = "SHORT_DECIMAL<" + std::to_string(precision) + "," +
+            std::to_string(scale) + ">";
       } else {
-        typeName = "HUGEINT";
+        typeName = "LONG_DECIMAL<" + std::to_string(precision) + "," +
+            std::to_string(scale) + ">";
       }
 
       nullability = substraitType.decimal().nullability();
