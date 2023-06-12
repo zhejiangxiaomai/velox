@@ -484,7 +484,7 @@ class Multiply {
         } else {
           countLeadingZerosA = bits::countLeadingZeros(a);
         }
-        if constexpr (std::is_same_v<B, int128_t>) {
+        if constexpr (std::is_same_v<R, int128_t>) {
           countLeadingZerosB = bits::countLeadingZerosUint128(std::abs(b));
         } else {
           countLeadingZerosB = bits::countLeadingZeros(b);
