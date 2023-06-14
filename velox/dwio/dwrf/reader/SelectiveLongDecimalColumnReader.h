@@ -121,14 +121,14 @@ class SelectiveLongDecimalColumnReader
             &dwio::common::alwaysTrue(),
             rows,
             dwio::common::ExtractToHook<
-                aggregate::MinMaxHook<UnscaledLongDecimal, false>>(hook));
+                aggregate::MinMaxHook<int128_t, false>>(hook));
         break;
       case aggregate::AggregationHook::kLongDecimalMin:
         readHelper<dense, velox::common::AlwaysTrue>(
             &dwio::common::alwaysTrue(),
             rows,
             dwio::common::ExtractToHook<
-                aggregate::MinMaxHook<UnscaledLongDecimal, true>>(hook));
+                aggregate::MinMaxHook<int128_t, true>>(hook));
         break;
       default:
         readHelper<dense, velox::common::AlwaysTrue>(

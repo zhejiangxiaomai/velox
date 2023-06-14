@@ -242,10 +242,10 @@ class MinMaxHook final : public AggregationHook {
       if (std::is_same_v<T, double>) {
         return kDoubleMin;
       }
-      if (std::is_same_v<T, UnscaledShortDecimal>) {
+      if (std::is_same_v<T, int64_t>) {
         return kShortDecimalMin;
       }
-      if (std::is_same_v<T, UnscaledLongDecimal>) {
+      if (std::is_same_v<T, int128_t>) {
         return kLongDecimalMin;
       }
     } else {
@@ -258,10 +258,10 @@ class MinMaxHook final : public AggregationHook {
       if (std::is_same_v<T, double>) {
         return kDoubleMax;
       }
-      if (std::is_same_v<T, UnscaledShortDecimal>) {
+      if (std::is_same_v<T, int64_t>) {
         return kShortDecimalMax;
       }
-      if (std::is_same_v<T, UnscaledLongDecimal>) {
+      if (std::is_same_v<T, int128_t>) {
         return kLongDecimalMax;
       }
     }

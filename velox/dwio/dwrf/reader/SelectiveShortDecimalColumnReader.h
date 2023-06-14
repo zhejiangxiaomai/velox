@@ -127,14 +127,14 @@ class SelectiveShortDecimalColumnReader
             &dwio::common::alwaysTrue(),
             rows,
             dwio::common::ExtractToHook<
-                aggregate::MinMaxHook<UnscaledShortDecimal, false>>(hook));
+                aggregate::MinMaxHook<int64_t, false>>(hook));
         break;
       case aggregate::AggregationHook::kShortDecimalMin:
         readHelper<dense, velox::common::AlwaysTrue>(
             &dwio::common::alwaysTrue(),
             rows,
             dwio::common::ExtractToHook<
-                aggregate::MinMaxHook<UnscaledShortDecimal, true>>(hook));
+                aggregate::MinMaxHook<int64_t, true>>(hook));
         break;
       default:
         readHelper<dense, velox::common::AlwaysTrue>(
