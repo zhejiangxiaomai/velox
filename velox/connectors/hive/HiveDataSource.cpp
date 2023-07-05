@@ -250,6 +250,7 @@ HiveDataSource::HiveDataSource(
     core::ExpressionEvaluator* expressionEvaluator,
     memory::MemoryAllocator* allocator,
     const std::string& scanId,
+    bool caseSensitive,
     folly::Executor* executor)
     : fileHandleFactory_(fileHandleFactory),
       readerOpts_(pool),
@@ -340,7 +341,7 @@ HiveDataSource::HiveDataSource(
     }
     readerOutputType_ = ROW(std::move(names), std::move(types));
   }
-
+  readerOpts_.setCaseSensitive(caseSensitive);
   rowReaderOpts_.setScanSpec(scanSpec_);
   rowReaderOpts_.setMetadataFilter(metadataFilter_);
 
