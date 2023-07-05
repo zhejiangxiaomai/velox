@@ -97,6 +97,7 @@ struct Converter<
         "Conversion to {} is not supported", TypeTraits<KIND>::name);
   }
 
+  template <typename From>
   static T cast(const From& v, const TypePtr& toType) {
     VELOX_NYI();
   }
@@ -139,7 +140,7 @@ struct Converter<
         0,
         false,
         false);
-    return cast(scale0Decimal.value(), );
+    return cast(scale0Decimal.value());
   }
 
   static T convertStringToInt(
@@ -248,7 +249,11 @@ struct Converter<
       if (kByteOrSmallInt) {
         return std::numeric_limits<int32_t>::min();
       }
-      return std::numeric_limits<T>::min();
+      if constexpr (std::is_same_v<T, int128_t>) {
+        VELOX_USER_FAIL("int128_t not support in minLimit function");
+      } else {
+        return std::numeric_limits<T>::min();
+      }
     }
     static int64_t maxLimit() {
       if (kByteOrSmallInt) {
@@ -393,6 +398,7 @@ struct Converter<
     }
   }
 
+  template <typename From>
   static T cast(const From& v, const TypePtr& toType) {
     VELOX_NYI();
   }

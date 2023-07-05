@@ -49,23 +49,23 @@ class ComparisonFunction final : public exec::VectorFunction {
     flatResult->mutableRawValues<uint64_t>();
     const Cmp cmp;
     if (decoded0->isIdentityMapping() && decoded1->isIdentityMapping()) {
-      auto decoded0Values = *args[0]->as<FlatVector<T>>();
-      auto decoded1Values = *args[1]->as<FlatVector<T>>();
+      auto decoded0Values = args[0]->as<FlatVector<T>>()->values();
+      auto decoded1Values = args[1]->as<FlatVector<T>>()->values();
       rows.applyToSelected([&](vector_size_t i) {
         flatResult->set(
-            i, cmp(decoded0Values.valueAt(i), decoded1Values.valueAt(i)));
+            i, cmp(decoded0Values->valueAt(i), decoded1Values->valueAt(i)));
       });
     } else if (decoded0->isIdentityMapping() && decoded1->isConstantMapping()) {
-      auto decoded0Values = *args[0]->as<FlatVector<T>>();
+      auto decoded0Values = args[0]->as<FlatVector<T>>()->values();
       auto constantValue = decoded1->valueAt<T>(0);
       rows.applyToSelected([&](vector_size_t i) {
-        flatResult->set(i, cmp(decoded0Values.valueAt(i), constantValue));
+        flatResult->set(i, cmp(decoded0Values->valueAt(i), constantValue));
       });
     } else if (decoded0->isConstantMapping() && decoded1->isIdentityMapping()) {
       auto constantValue = decoded0->valueAt<T>(0);
-      auto decoded1Values = *args[1]->as<FlatVector<T>>();
+      auto decoded1Values = args[1]->as<FlatVector<T>>()->values();
       rows.applyToSelected([&](vector_size_t i) {
-        flatResult->set(i, cmp(constantValue, decoded1Values.valueAt(i)));
+        flatResult->set(i, cmp(constantValue, decoded1Values->valueAt(i)));
       });
     } else {
       rows.applyToSelected([&](vector_size_t i) {

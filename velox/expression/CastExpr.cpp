@@ -208,17 +208,15 @@ void applyCastPrimitives(
   const bool isCastIntAllowDecimal = queryConfig.isCastIntAllowDecimal();
   auto* inputSimpleVector = input.as<SimpleVector<From>>();
 
-  const auto& queryConfig = context.execCtx()->queryCtx()->queryConfig();
-
   if (!queryConfig.isCastToIntByTruncate()) {
     context.applyToSelectedNoThrow(rows, [&](int row) {
       try {
         // Passing a false truncate flag
         if (isCastIntAllowDecimal) {
-          applyCastKernel<ToKind, FromKind, true>(
+          applyCastKernel<ToKind, FromKind, false, true>(
               row, inputSimpleVector, resultFlatVector);
         } else {
-          applyCastKernel<ToKind, FromKind, false>(
+          applyCastKernel<ToKind, FromKind, false, false>(
               row, inputSimpleVector, resultFlatVector);
         }
       } catch (const VeloxRuntimeError& re) {
