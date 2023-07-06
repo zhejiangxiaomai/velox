@@ -66,6 +66,7 @@ class E2EFilterTest : public E2EFilterTestBase {
     for (auto& batch : batches) {
       writer_->write(batch);
     }
+    writer_->flush();
     writer_->close();
   }
 
@@ -473,8 +474,7 @@ TEST_F(E2EFilterTest, list) {
 TEST_F(E2EFilterTest, metadataFilter) {
   // Follow the batch size in `E2EFiltersTestBase`,
   // so that each batch can produce a row group.
-  writerProperties_ =
-      ::parquet::WriterProperties::Builder().max_row_group_length(10)->build();
+  options_.maxRowGroupLength = 10;
   testMetadataFilter();
 }
 
@@ -573,6 +573,8 @@ TEST_F(E2EFilterTest, date) {
 }
 
 TEST_F(E2EFilterTest, combineRowGroup) {
+  options_.maxRowGroupLength = 5;
+  options_.rowsInRowGroup = 5;
   rowType_ = ROW({INTEGER()});
   std::vector<RowVectorPtr> batches;
   for (int i = 0; i < 5; i++) {
