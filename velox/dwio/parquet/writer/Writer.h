@@ -33,7 +33,8 @@ struct ArrowContext;
 struct WriterOptions {
   bool enableDictionary = true;
   int64_t dataPageSize = 1'024 * 1'024;
-  int32_t rowsInRowGroup = 10'000;
+  int64_t rowsInRowGroup = 10'000;
+  int64_t bytesInRowGroup = 128 * 1'024 * 1'024;
   int64_t maxRowGroupLength = 1'024 * 1'024;
   int64_t dictionaryPageSizeLimit = 1'024 * 1'024;
   double bufferGrowRatio = 1;
@@ -74,20 +75,16 @@ class Writer : public dwio::common::Writer {
   void close();
 
  private:
-  const int32_t rowsInRowGroup_;
+  const int64_t rowsInRowGroup_;
+  const int64_t bytesInRowGroup_;
   const double bufferGrowRatio_;
+
+  int64_t stagingRows_ = 0;
+  int64_t stagingBytes_ = 0;
 
   // Pool for 'stream_'.
   std::shared_ptr<memory::MemoryPool> pool_;
   std::shared_ptr<memory::MemoryPool> generalPool_;
-
-  std::shared_ptr<arrow::Schema> schema_;
-
-  // columns, Arrays
-  std::vector<std::vector<std::shared_ptr<arrow::Array>>> stagingChunks_;
-
-  // Final destination of output.
-  std::unique_ptr<dwio::common::DataSink> finalSink_;
 
   // Temporary Arrow stream for capturing the output.
   std::shared_ptr<ArrowDataBufferSink> stream_;
