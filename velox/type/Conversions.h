@@ -40,8 +40,9 @@ struct Converter {
   }
 
   template <typename T>
-  static typename TypeTraits<KIND>::NativeType
-  cast(T val, const TypePtr& toType) {
+  static typename TypeTraits<KIND>::NativeType cast(
+      T val,
+      const TypePtr& toType) {
     VELOX_UNSUPPORTED(
         "Conversion of {} to {} is not supported",
         CppToType<T>::name,
@@ -299,9 +300,9 @@ struct Converter<
       }
       if constexpr (std::is_same_v<T, int128_t>) {
         return std::numeric_limits<int128_t>::min();
-      // bool type's min is 0, but spark expects true for casting negative float
-      // data.
       } else if (!std::is_same_v<T, bool> && v < LimitType::minLimit()) {
+        // bool type's min is 0, but spark expects true for casting negative
+        // float data. So filter out bool type here.
         return LimitType::min();
       }
       return LimitType::cast(v);
@@ -480,7 +481,6 @@ struct Converter<
 
 template <bool TRUNCATE, bool ALLOW_DECIMAL>
 struct Converter<TypeKind::VARBINARY, void, TRUNCATE, ALLOW_DECIMAL> {
-
   template <typename T>
   static std::string cast(const T& v, const TypePtr& fromType) {
     VELOX_NYI();
@@ -489,7 +489,8 @@ struct Converter<TypeKind::VARBINARY, void, TRUNCATE, ALLOW_DECIMAL> {
   // Same semantics of TypeKind::VARCHAR converter.
   template <typename T>
   static std::string cast(const T& val) {
-    return Converter<TypeKind::VARCHAR, void, TRUNCATE, ALLOW_DECIMAL>::cast(val);
+    return Converter<TypeKind::VARCHAR, void, TRUNCATE, ALLOW_DECIMAL>::cast(
+        val);
   }
 };
 
