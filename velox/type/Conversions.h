@@ -41,7 +41,7 @@ struct Converter {
 
   template <typename T>
   static typename TypeTraits<KIND>::NativeType
-  cast(T val, bool& nullOutput, const TypePtr& toType) {
+  cast(T val, const TypePtr& toType) {
     VELOX_UNSUPPORTED(
         "Conversion of {} to {} is not supported",
         CppToType<T>::name,
@@ -52,6 +52,11 @@ struct Converter {
 template <>
 struct Converter<TypeKind::BOOLEAN> {
   using T = bool;
+
+  template <typename From>
+  static T cast(const From& v, const TypePtr& toType) {
+    VELOX_NYI();
+  }
 
   template <typename From>
   static T cast(const From& v) {
@@ -369,7 +374,7 @@ struct Converter<
     }
   }
 
-  static T cast(const int128_t& v, bool& nullOutput) {
+  static T cast(const int128_t& v) {
     if constexpr (TRUNCATE) {
       return T(v);
     } else {
@@ -467,18 +472,24 @@ struct Converter<
         "Conversion of Timestamp to Real or Double is not supported");
   }
 
-  static T cast(const int128_t& d, bool& nullOutput) {
+  static T cast(const int128_t& d) {
     VELOX_UNSUPPORTED(
         "Conversion of int128_t to Real or Double is not supported");
   }
 };
 
-template <bool TRUNCATE>
-struct Converter<TypeKind::VARBINARY, void, TRUNCATE> {
+template <bool TRUNCATE, bool ALLOW_DECIMAL>
+struct Converter<TypeKind::VARBINARY, void, TRUNCATE, ALLOW_DECIMAL> {
+
+  template <typename T>
+  static std::string cast(const T& v, const TypePtr& fromType) {
+    VELOX_NYI();
+  }
+
   // Same semantics of TypeKind::VARCHAR converter.
   template <typename T>
   static std::string cast(const T& val) {
-    return Converter<TypeKind::VARCHAR, void, TRUNCATE>::cast(val);
+    return Converter<TypeKind::VARCHAR, void, TRUNCATE, ALLOW_DECIMAL>::cast(val);
   }
 };
 
@@ -560,7 +571,7 @@ struct Converter<TypeKind::DATE, void, TRUNCATE, ALLOW_DECIMAL> {
   using T = typename TypeTraits<TypeKind::DATE>::NativeType;
 
   template <typename From>
-  static T cast(const From& v, bool& nullOutput, const TypePtr& toType) {
+  static T cast(const From& v, const TypePtr& toType) {
     VELOX_NYI();
   }
 

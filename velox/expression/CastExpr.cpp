@@ -47,16 +47,30 @@ void applyCastKernel(
     vector_size_t row,
     const SimpleVector<typename TypeTraits<FromKind>::NativeType>* input,
     FlatVector<typename TypeTraits<ToKind>::NativeType>* result) {
-  auto output = util::Converter<ToKind, void, Truncate, AllowDecimal>::cast(
-      input->valueAt(row));
-
+  // Special handling for string target type
   if constexpr (ToKind == TypeKind::VARCHAR || ToKind == TypeKind::VARBINARY) {
+    std::string output;
+    if (input->type()->isDecimal()) {
+      output = util::Converter<ToKind, void, Truncate, AllowDecimal>::cast(
+          input->valueAt(row), input->type());
+    } else {
+      output = util::Converter<ToKind, void, Truncate, AllowDecimal>::cast(
+          input->valueAt(row));
+    }
     // Write the result output to the output vector
     auto writer = exec::StringWriter<>(result, row);
     writer.copy_from(output);
     writer.finalize();
   } else {
-    result->set(row, output);
+    if (input->type()->isDecimal()) {
+      auto output = util::Converter<ToKind, void, Truncate, AllowDecimal>::cast(
+          input->valueAt(row), input->type());
+      result->set(row, output);
+    } else {
+      auto output = util::Converter<ToKind, void, Truncate, AllowDecimal>::cast(
+          input->valueAt(row));
+      result->set(row, output);
+    }
   }
 }
 
