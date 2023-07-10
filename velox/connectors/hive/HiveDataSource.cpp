@@ -341,6 +341,7 @@ HiveDataSource::HiveDataSource(
     }
     readerOutputType_ = ROW(std::move(names), std::move(types));
   }
+  rowReaderOpts_.setOutputType(readerOutputType_);
   readerOpts_.setCaseSensitive(caseSensitive);
   rowReaderOpts_.setScanSpec(scanSpec_);
   rowReaderOpts_.setMetadataFilter(metadataFilter_);
