@@ -87,9 +87,9 @@ class BloomFilterAggAggregate : public exec::Aggregate {
       bool /*mayPushdown*/) override {
     decodeArguments(rows, args);
     computeCapacity();
-    VELOX_USER_CHECK(
+    /*VELOX_USER_CHECK(
         !decodedRaw_.mayHaveNulls(),
-        "First argument of bloom_filter_agg cannot be null");
+        "First argument of bloom_filter_agg cannot be null");*/
     rows.applyToSelected([&](vector_size_t row) {
       auto group = groups[row];
       auto tracker = trackRowSize(group);
