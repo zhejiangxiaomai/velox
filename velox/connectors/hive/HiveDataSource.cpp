@@ -289,6 +289,9 @@ void checkColumnNameLowerCase(const SubfieldFilters& filters) {
 }
 
 void checkColumnNameLowerCase(const core::TypedExprPtr& typeExpr) {
+  if (typeExpr == nullptr) {
+    return;
+  }
   checkColumnNameLowerCase(typeExpr->type());
   for (auto& type : typeExpr->inputs()) {
     checkColumnNameLowerCase(type);
