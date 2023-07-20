@@ -469,6 +469,7 @@ HiveDataSource::HiveDataSource(
     readerOutputType_ = ROW(std::move(names), std::move(types));
   }
   readerOpts_.setFileSchema(hiveTableHandle->dataColumns());
+  readerOpts_.setFileColumnNamesReadAsLowerCase(fileColumnNamesReadAsLowerCase);
   rowReaderOpts_.setOutputType(readerOutputType_);
   rowReaderOpts_.setScanSpec(scanSpec_);
   rowReaderOpts_.setMetadataFilter(metadataFilter_);

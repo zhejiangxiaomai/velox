@@ -129,8 +129,7 @@ class ParquetRowReader : public dwio::common::RowReader {
  public:
   ParquetRowReader(
       const std::shared_ptr<ReaderBase>& readerBase,
-      const dwio::common::RowReaderOptions& options,
-      bool caseSensitive);
+      const dwio::common::RowReaderOptions& options);
   ~ParquetRowReader() override = default;
 
   int64_t nextRowNumber() override;
