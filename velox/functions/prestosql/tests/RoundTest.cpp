@@ -67,7 +67,7 @@ class RoundTest : public functions::test::FunctionBaseTest {
         {1.0 / 3, 0, 0.0},
         {1.0 / 3, 1, 0.3},
         {1.0 / 3, 2, 0.33},
-        {1.0 / 3, 10, 0.3333333333},
+        {1.0 / 3, 6, 0.333333},
         {-1.122112, 0, -1},
         {-1.129, 1, -1.1},
         {-1.129, 2, -1.13},
@@ -75,7 +75,7 @@ class RoundTest : public functions::test::FunctionBaseTest {
         {-1.0 / 3, 0, 0.0},
         {-1.0 / 3, 1, -0.3},
         {-1.0 / 3, 2, -0.33},
-        {-1.0 / 3, 10, -0.3333333333},
+        {-1.0 / 3, 6, -0.333333},
         {1.0, -1, 0.0},
         {0.0, -2, 0.0},
         {-1.0, -3, 0.0},
@@ -125,6 +125,7 @@ TEST_F(RoundTest, round) {
 TEST_F(RoundTest, roundWithDecimal) {
   runRoundWithDecimalTest<float>(testRoundWithDecFloatData<float>());
   runRoundWithDecimalTest<double>(testRoundWithDecFloatData<double>());
+  runRoundWithDecimalTest<float>(testRoundWithDecDoubleData<float>());
   runRoundWithDecimalTest<double>(testRoundWithDecDoubleData<double>());
 
   runRoundWithDecimalTest<int64_t>(testRoundWithDecIntegralData<int64_t>());
